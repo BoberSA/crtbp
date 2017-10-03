@@ -2,6 +2,7 @@
 """
 Created on Wed Mar 15 13:54:06 2017
 
+@author: Stanislav Bober
 """
 import scipy.optimize
 from crtbp_ode import crtbp

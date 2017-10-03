@@ -2,6 +2,7 @@
 """
 Created on Mon Jul 17 01:11:07 2017
 
+@author: Stanislav Bober
 """
 
 import math

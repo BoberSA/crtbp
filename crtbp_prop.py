@@ -2,6 +2,7 @@
 """
 Created on Wed Mar 15 13:58:00 2017
 
+@author: Stanislav Bober
 """
 
 import numpy as np

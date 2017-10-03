@@ -2,6 +2,7 @@
 """
 Created on Wed Mar 15 13:55:16 2017
 
+@author: Stanislav Bober
 """
 
 import numpy as np
@@ -236,7 +237,7 @@ def iVarRdotV(t, s, **kwargs):
     v = s[3:6]
     return r[0]*v[0]+r[1]*v[1]+r[2]*v[2]
 
-def stopFun(t, s, lst, ivar=iVarY, stopval=0, direction=0, **kwargs):
+def stopFun(t, s, lst, ivar=iVarY, stopval=0, direction=0, corr = True, **kwargs):
     ''' Universal event detection function for scipy.integrate.ode \
         solout application. Provides termination of integration process \
         when some event occurs. This happens when independent variable \
@@ -271,6 +272,9 @@ def stopFun(t, s, lst, ivar=iVarY, stopval=0, direction=0, **kwargs):
              from POSITIVE to NEGATIVE values
          0 : in both cases
          (like 'direction' argument in matlab's event functions)
+         
+    corr : bool
+        Determines whether it is necessary to adjust last state vector or not
                       
     Returns
     -------
@@ -292,13 +296,21 @@ def stopFun(t, s, lst, ivar=iVarY, stopval=0, direction=0, **kwargs):
     lst.append(np.asarray([*s,t,cur_iv]))
     prev_s = lst[-2]
     prev_iv = prev_s[-1]
-    if ((prev_iv < stopval) and (cur_iv > stopval) and ((direction == 1) or (direction == 0))):
-        return -1
-    if ((prev_iv > stopval) and (cur_iv < stopval) and ((direction == -1) or (direction == 0))):
+    f1 = (prev_iv < stopval) and (cur_iv > stopval) and ((direction == 1) or (direction == 0))
+    f2 = (prev_iv > stopval) and (cur_iv < stopval) and ((direction == -1) or (direction == 0))
+    if f1 or f2:
+        if corr:
+            arr = np.asarray(lst)
+            interp = interp1d(arr[-4:,-1], arr[-4:], axis=0, kind='cubic', copy=False, assume_sorted=False)
+            last_s = interp(stopval)
+            lst.pop()
+            lst.append(np.asarray([*last_s]))
         return -1
     return 0    
 
-def stopFunCombined(t, s, lst, events, **kwargs):
+
+
+def stopFunCombined(t, s, lst, events, out=[], **kwargs):
     ''' Universal event detection function that handles multiple events \ 
         for scipy.integrate.ode solout application. Provides termination \
         of integration process when terminate event(s) occur. This happens \
@@ -340,8 +352,11 @@ def stopFunCombined(t, s, lst, events, **kwargs):
                  (like 'direction' argument in matlab's event functions)
                  
         isterminal : integer, bool         
-            Terminal event terminates integration process.
+            Terminal event terminates integration process when event occurs.
             
+        corr : bool
+            Determines whether it is necessary to adjust last state vector or not
+        
         kwargs : dict
             Other parameters for ivar function
         }
@@ -350,8 +365,9 @@ def stopFunCombined(t, s, lst, events, **kwargs):
     -------
     
     -1 : scalar
-        When y coordinate of spacecraft crosses zero. Will be treated by
-        scipy.integrate.ode as it should stop integration process.
+        When independent variable goes through defined stopval value in \
+        specified direction. Will be treated by scipy.integrate.ode as it \
+        should stop integration process.
         
     0 : scalar
         Otherwise. Will be treated by scipy.integrate.ode as it should NOT
@@ -362,25 +378,66 @@ def stopFunCombined(t, s, lst, events, **kwargs):
     if not events:
         return 0
     
+    terminal = False
     cur_ivs = []
-    rets = []
-    trms = []
+    sn = s.shape[0] + 1
     
-    for i, event in enumerate(events):
+    trm_evs = []
+    
+    for event in events:
         ivar = event['ivar']
-        stopval = event['stopval']
-        direction = event['direction']
         evkwargs = event.get('kwargs', {})        
-        trms.append(event.get('isterminate', True))
-        rets.append(stopFun(t, s, lst, ivar, stopval, direction, **evkwargs))
-        cur_ivs.append(lst[-1][-1])
-        lst.pop()
+        cur_iv = ivar(t, s, **evkwargs)
+        cur_ivs.append(cur_iv)
 
-    lst.append(np.asarray([*s,t,*cur_ivs,*rets]))
-    return -1 * np.any(np.asarray(rets)*np.asarray(trms))
+    if not lst: # fast way to check if lst is empty
+        lst.append(np.asarray([*s,t,*cur_ivs]))
+        return 0
+        
+    lst.append(np.asarray([*s,t,*cur_ivs]))
+
+    for i, event in enumerate(events):
+        stopval = event.get('stopval', 0)
+        direction = event.get('direction', 0)
+        corr = event.get('corr', True)
+        isterminal = event.get('isterminal', True)
+
+        cur_iv = cur_ivs[i]
+        prev_iv = lst[-2][sn+i]
+
+        f1 = (prev_iv < stopval) and (cur_iv > stopval) and ((direction == 1) or (direction == 0))
+        f2 = (prev_iv > stopval) and (cur_iv < stopval) and ((direction == -1) or (direction == 0))
+        if f1 or f2:
+            last_s = lst[-1]
+            if corr:
+                # calculation of corrected state vector using cubic spline interpolation
+                # print('[%d]%f<>%f<>%f' % (i, prev_iv, stopval, cur_iv))
+                arr = np.asarray(lst)
+                interp = interp1d(arr[-4:,sn+i], arr[-4:], axis=0, kind='cubic', copy=False, assume_sorted=False)
+                last_s = interp(stopval)
+            out.append([i, last_s])
+            if isterminal:
+                terminal = True
+                if corr:
+                    trm_evs.append(last_s)
+
+    if terminal:
+        if corr:
+            # correction of last (extended) state vector with state vector of
+            # last terminal event occured
+            if trm_evs:
+                # math.abs is needed for backward integration (negative time)
+                last_trm_ev = max(trm_evs, key=lambda x: math.fabs(x[sn-1]))
+                lst.pop()
+                lst.append(last_trm_ev)
+        return -1
+    
+    return 0
 
 def accurateEvent(arr, stopval=0):
-    ''' Accurate calculation of spacecraft state vector at event \
+    ''' DEPRECATED
+        WAS INCORPORATED IN stopFun AND stopFunCombined
+        Accurate calculation of spacecraft state vector at event \
         right after the completion of integration process by terminating it \
         with stopFun. Uses last component of extended state vector \
         (independent variable).
@@ -407,69 +464,6 @@ def accurateEvent(arr, stopval=0):
     interp = interp1d(arr[-4:,-1], arr[-4:], axis=0, kind='cubic', copy=False, assume_sorted=False)
     return interp(stopval)
 
-
-#def accurateCombinedEvents(arr, stopval=0, idx=0):
-#    ''' Accurate calculation of spacecraft state vector at event \
-#        right after the completion of integration process by terminating it \
-#        with stopFun. Uses last component of extended state vector \
-#        (independent variable).
-#    
-#    Parameters
-#    ----------
-#
-#    arr : numpy array of n-by-k shape, where n > 3
-#        Array of state vectors. When stopFun was used for CRTBP problem
-#        it have size n-by-8 (x, y, z, vx, vy, vz, t, iv)
-#      
-#    stopval : double
-#        Same value that was used in stopFun for event detection
-#                             
-#    Returns
-#    -------
-#    
-#    s : numpy array of k elements
-#        State vector at event calculted with third order spline interpolation        
-#          
-#    '''
-#    if arr.shape[0] < 4:
-#        return arr[-1]
-#    interp = interp1d(arr[-4:,-1], arr[-4:], axis=0, kind='cubic', copy=False, assume_sorted=False)
-#    return interp(stopval)
-
-def accurateEventFull(arr, ivar, stopval, **kwargs):
-    ''' Accurate calculation of spacecraft state vector at event \
-        right after the completion of integration process by terminating it \
-        with stopFun (or another solout function).
-    
-    Parameters
-    ----------
-
-    arr : numpy array of n-by-k shape, where n > 3
-        Array of state vectors. For CRTBP problem it have size n-by-7
-        (x, y, z, vx, vy, vz, t)
-
-    ivar : function(t, s, **kwargs)
-        Should return independent variable from spacecraft state vector
-        (for example, see iVarY)
-       
-    stopval : double
-        Same value that was used in stopFun for event detection
-                             
-    Returns
-    -------
-    
-    s : numpy array of k elements
-        State vector at event calculted with third order spline interpolation        
-          
-    '''
-    if arr.shape[0] < 4:
-        return arr[-1]
-    iv_arr = np.asarray([ivar(arr[-4, -1], arr[-4], **kwargs), 
-                         ivar(arr[-3, -1], arr[-3], **kwargs), 
-                         ivar(arr[-2, -1], arr[-2], **kwargs), 
-                         ivar(arr[-1, -1], arr[-1], **kwargs)])
-    interp = interp1d(iv_arr, arr[-4:], axis=0, kind='cubic', copy=False, assume_sorted=False)
-    return interp(stopval)
 
 '''
     OLD FUNCTIONS
