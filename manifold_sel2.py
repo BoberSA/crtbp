@@ -27,7 +27,7 @@ from lagrange_pts import lagrange1, lagrange2
 from stop_funcs import stopFunCombined, iVarY
 
 # use 0 for plot without recalculation manifolds, 1 - with recalculation
-recalc = 0
+recalc = 1
 
 # constants
 Sm =  1.9891e30 # mass of the Sun
