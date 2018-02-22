@@ -8,7 +8,7 @@ Created on Wed Mar 15 13:58:00 2017
 import numpy as np
 import scipy, math
 from crtbp_ode import crtbp
-from stop_funcs import stopNull
+from stop_funcs import stopNull, stopFunCombined
 
 def propCrtbp(mu, s0, tspan, **kwargs):
     ''' Propagate spacecraft in CRTBP.
@@ -64,6 +64,55 @@ def propCrtbp(mu, s0, tspan, **kwargs):
     prop.integrate(tspan[1])
     return np.asarray(lst)
 
+def prop2Limits(mu1, y0, lims, **kwargs):
+    """
+    lims is a dictionary with terminal event functions
+    lims['left'] is a list of events that implement left limit
+    lims['right'] is a list of events that implement right limit
+    THis function is a copy from planar cr3bp
+    
+    Returns
+    -------
+    
+    0 : if spacecraft crosses left constrain
+    1 : otherwise
+    
+    and calculated orbit
+    """
+    evout = []
+    arr = propCrtbp(mu1, y0, [0, 3140.0], stopf=stopFunCombined,\
+                    events = lims['left']+lims['right'], out=evout, int_param=kwargs['int_param'])
+    #print(y0,evout)
+    if evout[-1][0] < len(lims['left']):
+        return 0, arr
+    else:
+        return 1, arr
+        
+def prop2Lyapunov(mu1, y0, lims, **kwargs):
+    """
+    
+    
+    Returns
+    -------
+    
+    0 : if spacecraft crosses left constrain
+    1 : otherwise
+    
+    and calculated orbit
+    """
+    evout = []
+    arr = propCrtbp(mu1, y0, [0, 3140.0], stopf=stopFunCombined,\
+                    events = lims['left']+lims['right'], out=evout, int_param=kwargs['int_param'])
+    #print(y0,evout)
+    teta = kwargs.get('teta', 120)
+    teta = np.radians(teta)
+    L = kwargs.get('L', 1.1557338510267852)
+    
+    if np.arctan(arr[-1,2], arr[-1, 0] - L) > -teta and np.arctan(arr[-1,2], arr[-1, 0] - L) < teta:
+        return 1
+    else:
+        return 0
+
 
 def prop2Planes(mu, s0, planes, **kwargs):
     ''' Propagate spacecraft in CRTBP up to defined terminal planes.
@@ -118,6 +167,197 @@ def prop2Planes(mu, s0, planes, **kwargs):
     if ((s1[0] > planes[1]) or (math.fabs(s1[1]) > planes[2])):
         return 1
     return 0
+
+def findVLimits(mu, y0, beta, lims, dv0, **kwargs):
+    ''' Calculate velocity correction vector in XY plane that corresponds to \
+        bounded motion around libration point in CRTBP.
+        Uses modified bisection algorithm; prop2Limits.
+    
+    Parameters
+    ----------
+    mu : scalar
+        CRTBP mu1 coefficient.
+
+    y0 : array_like with 6 components
+        Initial spacecraft state vector (x0,y0,vx0,vy0).
+        
+    beta : scalar
+        Angle at which correction value will be found.
+        
+    lims : 
+        See prop2Limits function.
+            
+    dv0 : scalar
+        Initial step for correction value calculation.
+
+        
+    Optional
+    --------
+    
+    **kwargs : dict
+        Parameters for prop2Planes function.
+        
+    Returns
+    -------
+    
+    v : np.array
+      Array of (2,) shape - velocity correction vector
+      in XY plane (dvx,dvy)
+    
+    See Also
+    --------
+    
+    prop2Limits
+       
+    '''
+    y1 = np.asarray(y0).copy()
+    vstart = y1[3:5].copy()
+    dv = dv0
+    dvtol = kwargs.get('dvtol', 1e-16)
+    
+    rads = math.radians(beta)
+    beta_n = np.array([math.cos(rads), math.sin(rads)])
+       
+    p, _ = prop2Limits(mu, y1, lims, **kwargs)
+    y1[3:5] = vstart + dv * beta_n
+    p1, _ = prop2Limits(mu, y1, lims, **kwargs)
+    
+    if p == p1:
+        dv = -dv
+       
+    v = dv        
+    i = 0
+    while math.fabs(dv) > dvtol and i < 100:
+        y1[3:5] = vstart + v * beta_n
+        p1, _ = prop2Limits(mu, y1, lims, **kwargs)
+     
+        if p1 != p:
+            v -= dv
+            dv *= 0.5
+
+        v += dv
+        i += 1
+    print(i)
+#    print('%g'%v, end=' ')
+    return v * beta_n
+
+
+import matplotlib.pyplot as plt
+from datetime import datetime
+
+def findVLimits_debug(mu, y0, beta, lims, dv0, **kwargs):
+    ''' Calculate velocity correction vector in XY plane that corresponds to \
+        bounded motion around libration point in CRTBP.
+        Uses modified bisection algorithm; prop2Limits.
+    
+    Parameters
+    ----------
+    mu : scalar
+        CRTBP mu1 coefficient.
+
+    y0 : array_like with 6 components
+        Initial spacecraft state vector (x0,y0,vx0,vy0).
+        
+    beta : scalar
+        Angle at which correction value will be found.
+        
+    lims : 
+        See prop2Limits function.
+            
+    dv0 : scalar
+        Initial step for correction value calculation.
+
+        
+    Optional
+    --------
+    
+    **kwargs : dict
+        Parameters for prop2Planes function.
+        
+    Returns
+    -------
+    
+    v : np.array
+      Array of (2,) shape - velocity correction vector
+      in XY plane (dvx,dvy)
+    
+    See Also
+    --------
+    
+    prop2Limits
+       
+    '''
+    
+    lst = []
+    y1 = np.asarray(y0).copy()
+    vstart = y1[3:5].copy()
+    dv = dv0
+    dvtol = kwargs.get('dvtol', 1e-16)
+    
+    rads = math.radians(beta)
+    beta_n = np.array([math.cos(rads), math.sin(rads)])
+       
+    p, _ = prop2Limits(mu, y1, lims, **kwargs)
+    y1[3:5] = vstart + dv * beta_n
+    p1, arr = prop2Limits(mu, y1, lims, **kwargs)
+    
+    if p == p1:
+        dv = -dv
+       
+    v = dv  
+    lst.append(v)
+    
+    fig, ax = plt.subplots(1, 3)
+    fig.set_size_inches((15,5))
+    
+    if p1 == 0:
+        ax[0].plot(arr[:,0],arr[:,1], 'b')
+        ax[1].plot(arr[:,0],arr[:,2], 'b')
+        ax[2].plot(arr[:,1],arr[:,2], 'b')
+    else:
+        ax[0].plot(arr[:,0],arr[:,1], 'r')
+        ax[1].plot(arr[:,0],arr[:,2], 'r')
+        ax[2].plot(arr[:,1],arr[:,2], 'r')
+    
+    i = 0
+    while math.fabs(dv) > dvtol and i < 150:
+        #print(v, p, p1)
+        y1[3:5] = vstart + v * beta_n
+        p1, arr = prop2Limits(mu, y1, lims, **kwargs)
+        
+        
+        if p1 == 0:
+            ax[0].plot(arr[:,0],arr[:,1], 'b')
+            ax[1].plot(arr[:,0],arr[:,2], 'b')
+            ax[2].plot(arr[:,1],arr[:,2], 'b')
+        else:
+            ax[0].plot(arr[:,0],arr[:,1], 'r')
+            ax[1].plot(arr[:,0],arr[:,2], 'r')
+            ax[2].plot(arr[:,1],arr[:,2], 'r')
+        
+        if p1 != p:
+            v -= dv
+            dv *= 0.5
+
+        v += dv
+        lst.append(v)
+        i += 1
+    y1[3:5] = vstart + v * beta_n
+    
+    ax[0].set(xlabel='X', ylabel='Y')
+    ax[1].set(xlabel='X', ylabel='Z')
+    ax[2].set(xlabel='Y', ylabel='Z')
+    
+    plt.title(str([y1[0], y1[2], y1[4]]))
+    
+    plt.savefig('pics/debug '+datetime.now().isoformat().replace(':','-')+'.png')
+        
+#    print('%g'%v, end=' ')
+    return v * beta_n
+
+
+
+
 
 def prop2Spheres(mu, s0, spheres, **kwargs):
     ''' Propagate spacecraft in CRTBP up to defined terminal planes.
