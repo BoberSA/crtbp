@@ -234,7 +234,9 @@ def iVarRdotV(t, s, **kwargs):
     '''     
     center = kwargs.get('center', np.zeros(3))
     r = s[:3] - center
+#    r = r / (r[0]*r[0]+r[1]*r[1]+r[2]*r[2])
     v = s[3:6]
+#    v = v / (v[0]*v[0]+v[1]*v[1]+v[2]*v[2])
     return r[0]*v[0]+r[1]*v[1]+r[2]*v[2]
 
 def stopFun(t, s, lst, ivar=iVarY, stopval=0, direction=0, corr = True, **kwargs):
@@ -311,11 +313,11 @@ def stopFun(t, s, lst, ivar=iVarY, stopval=0, direction=0, corr = True, **kwargs
 
 
 def stopFunCombined(t, s, lst, events, out=[], **kwargs):
-    ''' Universal event detection function that handles multiple events \ 
-        for scipy.integrate.ode solout application. Provides termination \
-        of integration process when terminate event(s) occur. This happens \
-        when independent variable goes through defined stopval value in \
-        specified direction.
+    ''' Universal event detection function that handles multiple events. 
+        Intended for scipy.integrate.ode solout application. Provides \
+        termination of integration process when first terminate event occur. \
+        This happens when independent variable associated with this event \
+        goes through defined stopval value in specified direction.
         Uses almost the same ideas as in matlab event functions.
         Can be used for gathering all intergation steps.
         Shoudn't be called directly but through scipy.integrate.ode.
@@ -330,7 +332,10 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
         State vector of massless spacecraft (x,y,z,vx,vy,vz)
 
     lst : list
-        Every call of this function put np.hstack of (s, t) into lst.
+        Every call of this function put [*s,t,*cur_ivs] into lst, where 
+        t - time (at current integration step),
+        s - spacecraft state vector at time t,
+        cur_ivs - list of independent variable values at time t.
         
     events : list of dicts
         Each dict consists of necessary information for event:
@@ -360,18 +365,26 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
         kwargs : dict
             Other parameters for ivar function
         }
+        
+    out : list
+        If non-terminal event(s) occur in [ti-1, ti] interval, 'out' will
+        be filled with [ei, np.array([*s,te,*cur_ivs])], where:
+        te - time of event,
+        s - state vector at te,
+        cur_ivs - values of independent variables at te.
               
     Returns
     -------
     
     -1 : scalar
-        When independent variable goes through defined stopval value in \
+        When there are terminal event in event list and independent variable \
+        assiciated with this event goes through defined stopval value in \
         specified direction. Will be treated by scipy.integrate.ode as it \
         should stop integration process.
         
     0 : scalar
-        Otherwise. Will be treated by scipy.integrate.ode as it should NOT
-        stop integration process.
+        Otherwise. Will be treated by scipy.integrate.ode as it\
+        should continue integration process.
         
           
     '''
@@ -383,6 +396,7 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
     sn = s.shape[0] + 1
     
     trm_evs = []
+    out_ = []
     
     for event in events:
         ivar = event['ivar']
@@ -408,26 +422,40 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
         f1 = (prev_iv < stopval) and (cur_iv > stopval) and ((direction == 1) or (direction == 0))
         f2 = (prev_iv > stopval) and (cur_iv < stopval) and ((direction == -1) or (direction == 0))
         if f1 or f2:
-            last_s = lst[-1]
+            last_s = lst[-1].copy() # FIX: .copy() is important here
             if corr:
                 # calculation of corrected state vector using cubic spline interpolation
+                # if number of state vectors available are less than 4 then
+                # quadratic/linear interpolation are used
                 # print('[%d]%f<>%f<>%f' % (i, prev_iv, stopval, cur_iv))
                 arr = np.asarray(lst)
-                interp = interp1d(arr[-4:,sn+i], arr[-4:], axis=0, kind='cubic', copy=False, assume_sorted=False)
+                if arr.shape[0] == 2:
+                    interp = interp1d(arr[-2:,sn+i], arr[-2:], axis=0, kind='linear', copy=False, assume_sorted=False)
+                elif arr.shape[0] == 3:
+                    interp = interp1d(arr[-3:,sn+i], arr[-3:], axis=0, kind='quadratic', copy=False, assume_sorted=False)
+                else:
+                    interp = interp1d(arr[-4:,sn+i], arr[-4:], axis=0, kind='cubic', copy=False, assume_sorted=False)                    
                 last_s = interp(stopval)
-            out.append([i, last_s])
+            out_.append([i, last_s])
             if isterminal:
                 terminal = True
                 if corr:
                     trm_evs.append(last_s)
-
+    
+    tsort = kwargs.get('tsort', True)
+    # extend 'out' list with
+    if tsort: #sorted by time events
+        out.extend(sorted(out_, key=lambda x: math.fabs(x[1][sn-1])))
+    else: #sorted by index in event list
+        out.extend(out_)
+        
     if terminal:
         if corr:
-            # correction of last (extended) state vector with state vector of
-            # last terminal event occured
+            # correction of last state vector with state vector of
+            # first terminal event occured
             if trm_evs:
                 # math.abs is needed for backward integration (negative time)
-                last_trm_ev = max(trm_evs, key=lambda x: math.fabs(x[sn-1]))
+                last_trm_ev = min(trm_evs, key=lambda x: math.fabs(x[sn-1]))
                 lst.pop()
                 lst.append(last_trm_ev)
         return -1
