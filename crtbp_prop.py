@@ -2,13 +2,13 @@
 """
 Created on Wed Mar 15 13:58:00 2017
 
-@author: Stanislav Bober
+@author: Stanislav Bober, Guskova Maria
 """
 
 import numpy as np
 import scipy, math
 from crtbp_ode import crtbp
-from stop_funcs import stopNull
+from stop_funcs import stopNull, stopFunCombined
 
 def propCrtbp(mu, s0, tspan, **kwargs):
     ''' Propagate spacecraft in CRTBP.
@@ -64,6 +64,55 @@ def propCrtbp(mu, s0, tspan, **kwargs):
     prop.integrate(tspan[1])
     return np.asarray(lst)
 
+def prop2Limits(mu1, y0, lims, **kwargs):
+    """
+    lims is a dictionary with terminal event functions
+    lims['left'] is a list of events that implement left limit
+    lims['right'] is a list of events that implement right limit
+    THis function is a copy from planar cr3bp
+    
+    Returns
+    -------
+    
+    0 : if spacecraft crosses left constrain
+    1 : otherwise
+    
+    and calculated orbit
+    """
+    evout = []
+    arr = propCrtbp(mu1, y0, [0, 3140.0], stopf=stopFunCombined,\
+                    events = lims['left']+lims['right'], out=evout, **kwargs)
+    #print(y0,evout)
+    if evout[-1][0] < len(lims['left']):
+        return 0, arr
+    else:
+        return 1, arr
+        
+def prop2Lyapunov(mu1, y0, lims, **kwargs):
+    """
+    
+    
+    Returns
+    -------
+    
+    0 : if spacecraft crosses left constrain
+    1 : otherwise
+    
+    and calculated orbit
+    """
+    evout = []
+    arr = propCrtbp(mu1, y0, [0, 3140.0], stopf=stopFunCombined,\
+                    events = lims['left']+lims['right'], out=evout, int_param=kwargs['int_param'])
+    #print(y0,evout)
+    teta = kwargs.get('teta', 120)
+    teta = np.radians(teta)
+    L = kwargs.get('L', 1.1557338510267852)
+    
+    if np.arctan(arr[-1,2], arr[-1, 0] - L) > -teta and np.arctan(arr[-1,2], arr[-1, 0] - L) < teta:
+        return 1
+    else:
+        return 0
+
 
 def prop2Planes(mu, s0, planes, **kwargs):
     ''' Propagate spacecraft in CRTBP up to defined terminal planes.
@@ -118,6 +167,7 @@ def prop2Planes(mu, s0, planes, **kwargs):
     if ((s1[0] > planes[1]) or (math.fabs(s1[1]) > planes[2])):
         return 1
     return 0
+
 
 def prop2Spheres(mu, s0, spheres, **kwargs):
     ''' Propagate spacecraft in CRTBP up to defined terminal planes.
