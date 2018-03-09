@@ -8,10 +8,11 @@ Created on Mon Feb 19 22:20:41 2018
 import numpy as np
 from crtbp_prop import propCrtbp
 from find_vel import findVLimits
-from lagrange_pts import lagrange1, lagrange2
+#from lagrange_pts import lagrange1, lagrange2
 from stop_funcs import stopFunCombined, iVarY, iVarVY, iVarT
 
-def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, retarr=False, retdv=False, retevout=False, T=None, **kwargs):
+def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, \
+               retarr=False, retdv=False, retevout=False, T=None, **kwargs):
     ''' Orbit geometry calculation function.
         Propagates orbit for 'nrevs' revolutions using findVLimits function \
         after each revolution for station-keeping.
@@ -114,7 +115,7 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, retarr=
     print(0, end=' ')
     for i in range(nrevs):
         s1 = arr[-1, :sn].copy()
-        dv0 = np.linalg.norm(DV[-1])
+#        dv0 = np.linalg.norm(DV[-1])
         v = findVLimits(mu, s1, beta[1], events, dv0, **kwargs)
         s1[3:5] += v
         cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined,
@@ -125,7 +126,8 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, retarr=
         DV = np.vstack((DV, v))
         print(i+1, end=' ')
     
-    evout = np.array([[e[0], *e[1]] for e in evout])
+    evout.pop(0)
+    evout = np.array([[e[0], *e[2]] for e in evout])
     
     evY = evout[(evout[:,0]==1)]
     maskYp = (evY[:,2] >= 0.0)
