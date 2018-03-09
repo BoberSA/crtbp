@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from crtbp_prop import propCrtbp
 from find_vel import findVPlanes
 from lagrange_pts import lagrange1, lagrange2
-from stop_funcs import stopFunCombinedCount, iVarX, iVarY, iVarAlpha
+from stop_funcs import stopFunCombined, iVarX, iVarY, iVarAlpha
 
 # constants
 Sm =  1.9891e30 # mass of the Sun
@@ -47,20 +47,21 @@ Z0km =  200000
 y0 = np.array([L[1] + X0km/ER, 0, Z0km/ER, 0, 0, 0])
 
 # find initial velocity for halo orbit
-#v = findVPlanes(mu1, y0, 90, planes, 0.1, int_param=int_param)
+v = findVPlanes(mu1, y0, 90, planes, 0.1, int_param=int_param)
 y0[3:5] = v
 
 # events
-ev_names = ['X:0', 'alpha:120', 'Y:0', 'alpha:60']
-eventX = {'ivar':iVarX, 'stopval':L[1], 'direction': 0, 'isterminal':False, 'corr':True}
-#eventY = {'ivar':iVarY, 'stopval':   0, 'direction':1, 'isterminal':True,  'corr':True}
-#eventA = {'ivar':iVarAlpha, 'stopval': np.deg2rad(120), 'direction':0, 'isterminal':False, 'corr':True, 'kwargs':{'center':L[1]}}
-#eventB = {'ivar':iVarAlpha, 'stopval': np.deg2rad(60), 'direction':0, 'isterminal':False, 'corr':True, 'kwargs':{'center':L[1]}}
+ev_names = ['X=0']
+
+# try this values for 'count': [-1, 0, 1, 2, ...]
+# and this values for 'isterminal': [True, False]
+# see what is going on
+eventX = {'ivar':iVarX, 'stopval':L[1], 'direction': 0, 'isterminal':True, 'corr':True, 'count':2}
+
 evout = []
 
 # integrate CRTBP equations of motion with event detection routine
-#arr = propCrtbp(mu1, y0, [0, np.pi], stopf=stopFunCombinedCount, events = [eventX, eventA, eventY, eventB], out=evout, int_param=int_param)
-arr = propCrtbp(mu1, y0, [0, 2*np.pi], stopf=stopFunCombinedCount, events = [eventX], out=evout, int_param=int_param)
+arr = propCrtbp(mu1, y0, [0, 2*np.pi], stopf=stopFunCombined, events = [eventX], out=evout, int_param=int_param)
 
 # plot orbit projection in XY plane
 plt.plot(arr[:,0],arr[:,1],'-', alpha=0.8, linewidth=2)
@@ -69,4 +70,4 @@ plt.axis('equal')
 # plot events
 for ie, ic, s in evout[1:]:
     plt.plot(s[0], s[1], '+k')
-    plt.text(s[0], s[1], ' [%d]<%d> %s' % (ie, 0 if ic is None else ic, ev_names[ie]))    
+    plt.text(s[0], s[1], ' [%d]{%d} %s' % (ie, 0 if ic is None else ic, ev_names[ie]))    
