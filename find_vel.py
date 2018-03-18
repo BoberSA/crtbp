@@ -63,7 +63,7 @@ def findVLimits(mu, y0, beta, lims, dv0, **kwargs):
     y1[3:5] = vstart + dv * beta_n
     p1, _ = prop2Limits(mu, y1, lims, **kwargs)
     
-    if p == p1 and p == 0:
+    if p == p1 and p == 1:
         dv = -dv
        
     v = dv        
@@ -142,7 +142,7 @@ def findVLimits_debug(mu, y0, beta, lims, dv0, **kwargs):
     y1[3:5] = vstart + dv * beta_n
     p1, arr = prop2Limits(mu, y1, lims, **kwargs)
     
-    if p == p1:
+    if p == p1 and p == 1:
         dv = -dv
        
     v = dv  
@@ -251,7 +251,7 @@ def findVPlanes(mu, s0, beta, planes, dv0, **kwargs):
     s1[3:5] = vstart + dv * beta_n
     p1 = prop2Planes(mu, s1, planes, **kwargs)
     
-    if p == p1:
+    if p == p1 and p == 1:
         dv = -dv
        
     v = dv        
@@ -322,7 +322,8 @@ def findVSpheres(mu, s0, beta, spheres, dv0, **kwargs):
     beta_n = np.array([math.cos(rads), math.sin(rads)])
     
     p = prop2Spheres(mu, s1, spheres, **kwargs)
-    if p == 1:
+    
+    if p == 1 and p == 1:
         dv = -dv
         
     v = dv
