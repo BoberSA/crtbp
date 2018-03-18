@@ -63,7 +63,7 @@ def findVLimits(mu, y0, beta, lims, dv0, **kwargs):
     y1[3:5] = vstart + dv * beta_n
     p1, _ = prop2Limits(mu, y1, lims, **kwargs)
     
-    if p == p1:
+    if p == p1 and p == 0:
         dv = -dv
        
     v = dv        
@@ -78,7 +78,7 @@ def findVLimits(mu, y0, beta, lims, dv0, **kwargs):
 
         v += dv
         i += 1
-    print(i)
+#    print(i)
 #    print('%g'%v, end=' ')
     return v * beta_n
 
