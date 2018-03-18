@@ -129,18 +129,34 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, \
     evout.pop(0)
     evout = np.array([[e[0], *e[2]] for e in evout])
     
-    evY = evout[(evout[:,0]==1)]
-    maskYp = (evY[:,2] >= 0.0)
-    Yp = evY[maskYp,2]
-    Ym = evY[np.logical_not(maskYp),2]
-    evXZ = evout[(evout[:,0]==0)]
-    evXZ[:,1] -= center
-    maskXp = (evXZ[:,1] >= 0.0)
-    Xp = evXZ[maskXp, 1]
-    Xm = evXZ[np.logical_not(maskXp), 1]
-    maskZp = (evXZ[:,3] >= 0.0)
-    Zp = evXZ[maskZp, 3]
-    Zm = evXZ[np.logical_not(maskZp), 3]
+    maskY = (evout[:,0]==1)
+    if np.any(maskY):
+        evY = evout[maskY]
+        maskYp = (evY[:,2] >= 0.0)
+        Yp = evY[maskYp,2] if np.any(maskYp) else np.array([0])
+        maskYm = np.logical_not(maskYp)
+        Ym = evY[maskYm,2] if np.any(maskYm) else np.array([0])
+    else:
+        Yp = np.array([0])
+        Ym = np.array([0])
+    
+    maskZ = (evout[:,0]==0)
+    if (np.any(maskZ)):
+        evXZ = evout[maskZ]
+        evXZ[:,1] -= center
+        maskXp = (evXZ[:,1] >= 0.0)
+        Xp = evXZ[maskXp, 1] if np.any(maskXp) else np.array([0])
+        maskXm = np.logical_not(maskXp)
+        Xm = evXZ[maskXm, 1]  if np.any(maskXm) else np.array([0])
+        maskZp = (evXZ[:,3] >= 0.0)
+        Zp = evXZ[maskZp, 3] if np.any(maskZp) else np.array([0])   
+        maskZm = np.logical_not(maskZp)
+        Zm = evXZ[maskZm, 3] if np.any(maskZm) else np.array([0])        
+    else:
+        Xp = np.array([0])
+        Xm = np.array([0])
+        Zp = np.array([0])
+        Zm = np.array([0])
 
     ylim = (np.min(Ym), np.max(Yp), np.max(Ym), np.min(Yp))
     xlim = (np.min(Xm), np.max(Xp), np.max(Xm), np.min(Xp))
