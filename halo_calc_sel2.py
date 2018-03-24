@@ -9,23 +9,11 @@ Created on Sun Mar 18 19:45:43 2018
 import numpy as np
 import scipy.interpolate
 import scipy.optimize
-import matplotlib.pyplot as plt
-import matplotlib
-#import matplotlib.patches as patches
-
-font = {'family' : 'Times New Roman',
-        'size' : 22}
-matplotlib.rc('font', **font)
-#matplotlib inline
 
 from crtbp_prop import propCrtbp
-from find_vel import findVLimits, findVLimits_debug
+from find_vel import findVLimits
 from lagrange_pts import lagrange_pts
-from stop_funcs import stopFunCombined, iVarX, iVarY, iVarR, iVarR2
-#from orbit_geom import orbit_geom
-#from jacobi import jacobi_const
-
-recalc = 0
+from stop_funcs import stopFunCombined, iVarX, iVarY
 
 # constants
 Sm =  1.9891e30 # mass of the Sun
@@ -35,8 +23,6 @@ mu1 = Sm / (Sm + Em) # CRTBP main coefficient
 L = lagrange_pts(mu1) # L1, L2 positions
 L1 = L[0, 0]
 L2 = L[1, 0]
-Ts = 365*24*60*60 / 2 / np.pi
-
 
 rtol = 1e-12 # integration relative tolerance
 nmax = 1e6 # max number of integration steps
@@ -53,21 +39,16 @@ evL2_U = {'ivar':iVarY, 'stopval':     topp, 'direction':  0, 'isterminal':True,
 evL2_D = {'ivar':iVarY, 'stopval':    -topp, 'direction':  0, 'isterminal':True, 'corr':False}
 evL2 = {'left':[evL2_L], 'right':[evL2_R, evL2_D, evL2_U]}
 
-rightpL1 = L1 + dXkm / ER
-leftpL1 = L1 - dXkm / ER
-evL1_L = {'ivar':iVarX, 'stopval':  leftpL1, 'direction': -1, 'isterminal':True, 'corr':True}
-evL1_R = {'ivar':iVarX, 'stopval': rightpL1, 'direction':  1, 'isterminal':True, 'corr':True}
-evL1_U = {'ivar':iVarY, 'stopval':     topp, 'direction':  0, 'isterminal':True, 'corr':False}
-evL1_D = {'ivar':iVarY, 'stopval':    -topp, 'direction':  0, 'isterminal':True, 'corr':False}
-evL1 = {'left':[evL1_L], 'right':[evL1_R, evL1_D, evL1_U]}
-
 # additional events
 evY = {'ivar':iVarY, 'stopval':  0, 'direction': 1, 'isterminal':True,  'corr':True}
 
-
+# Az range - z-amplitudes of halo orbits (km)
 halo_z0 = np.arange(700000, 0, -50000)
 
-def halo_goal(x, z, mu1, **kwargs):
+sel2_halo = np.zeros((halo_z0.shape[0], 6))
+sel2_halo[:,2] = halo_z0 / ER
+
+def halo_goal(x, z, mu1, retv=False, **kwargs):
     print(x*ER, end=' ')
     s0 = np.array([L2 + x, 0, z, 0, 0, 0])
     v = findVLimits(mu1, s0, 90, evL2, 0.2, **kwargs)
@@ -79,17 +60,21 @@ def halo_goal(x, z, mu1, **kwargs):
     evout.pop(0)
     vx = evout[-1][2][3]
     vz = evout[-1][2][5]
+    if retv:
+        return vx**2 + vz**2, v
     return vx**2 + vz**2
 
-halo_x0 = []
+for i, s0 in enumerate(sel2_halo):
+    print('[%02d]'%i, end = ' ')
+    z = s0[2]
+    f = lambda x: halo_goal(x, z, mu1, int_param=int_param)
+    opt = scipy.optimize.fminbound(f, -1000000/ER, 0, full_output=True, xtol=rtol)
+    x = opt[0]
+    _, v = halo_goal(x, z, mu1, retv=True, int_param=int_param)
+    print('\nz =', z, 'x =', x, 'v =', v)
+    sel2_halo[i, 0] = x
+    sel2_halo[i, 4] = v[1]
 
-for z in halo_z0:
-    print('\nz = ', z)
-    f = lambda x: halo_goal(x, z/ER, mu1, int_param=int_param)
-    opt = scipy.optimize.fminbound(f, -1000000/ER, 0, full_output=True, xtol=1e-6)
-    halo_x0.append(opt[0]*ER)    
-    
-halo_xz0 = np.vstack((halo_x0, halo_z0)).T
-
-print(halo_xz0)
+# save initial state vectors for halo to file
+np.save('SEL2_halo.npy', sel2_halo)
 
