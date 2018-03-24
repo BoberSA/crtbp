@@ -26,7 +26,7 @@ from stop_funcs import stopFunCombined, iVarX, iVarY, iVarR, iVarR2
 #from orbit_geom import orbit_geom
 #from jacobi import jacobi_const
 
-recalc = 0
+recalc = 1
 
 # constants
 Sm =  1.9891e30 # mass of the Sun
@@ -68,23 +68,24 @@ evY1 = {'ivar':iVarY, 'stopval':  0, 'direction': -1, 'isterminal':True,  'corr'
 
 halo_N = 101
 
-L1_halo_xz0 = np.load('SEL1_halo_xz.npy')
-L2_halo_xz0 = np.load('SEL2_halo_xz.npy')
+L1_halo = np.load('SEL1_halo.npy')
+L2_halo = np.load('SEL2_halo.npy')
 
-halo_intrp = scipy.interpolate.interp1d(L1_halo_xz0[::-1,1], L1_halo_xz0[::-1], \
+halo_intrp = scipy.interpolate.interp1d(L1_halo[::-1,2], L1_halo[::-1], \
                                         axis=0, kind='cubic')
-L1_halo_xzi = halo_intrp(np.linspace(L1_halo_xz0[0, 1], L1_halo_xz0[-1,1], halo_N))
+L1_halo_i = halo_intrp(np.linspace(L1_halo[0, 2], L1_halo[-1,2], halo_N))
 
-halo_intrp = scipy.interpolate.interp1d(L2_halo_xz0[::-1,1], L2_halo_xz0[::-1], \
+halo_intrp = scipy.interpolate.interp1d(L2_halo[::-1,2], L2_halo[::-1], \
                                         axis=0, kind='cubic')
-L2_halo_xzi = halo_intrp(np.linspace(L2_halo_xz0[0, 1], L2_halo_xz0[-1,1], halo_N))
+L2_halo_i = halo_intrp(np.linspace(L2_halo[0, 2], L2_halo[-1,2], halo_N))
 
 if recalc:
     L1_orbs = []
-    for x, z in L1_halo_xzi:
-        print(z)
-        s0 = np.array([L1 + x/ER, 0, z/ER, 0, 0, 0])
-        v = findVLimits(mu1, s0, 90, evL1, 0.2, int_param=int_param)
+    print('L1')
+    for s0 in L1_halo_i:
+        print(s0[[0,2]]*ER)
+        s0[0] += L1
+        v = findVLimits(mu1, s0, 90, evL1, 1e-3, int_param=int_param)
         s0[3:5] += v
         evout = []
         orb=propCrtbp(mu1, s0, [0, 2*np.pi], \
@@ -93,10 +94,11 @@ if recalc:
         L1_orbs.append(orb)
         
     L2_orbs = []
-    for x, z in L2_halo_xzi:
-        print(z)
-        s0 = np.array([L2 + x/ER, 0, z/ER, 0, 0, 0])
-        v = findVLimits(mu1, s0, 90, evL2, 0.2, int_param=int_param)
+    print('L2')
+    for s0 in L2_halo_i:
+        print(s0[[0,2]]*ER)
+        s0[0] += L2
+        v = findVLimits(mu1, s0, 90, evL2, 1e-3, int_param=int_param)
         s0[3:5] += v
         evout = []
         orb=propCrtbp(mu1, s0, [0, 2*np.pi], \
