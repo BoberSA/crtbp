@@ -7,11 +7,11 @@ Created on Mon Feb 19 22:20:41 2018
 
 import numpy as np
 from crtbp_prop import propCrtbp
-from find_vel import findVLimits
+from find_vel import findVLimits, findVLimits_debug
 #from lagrange_pts import lagrange1, lagrange2
-from stop_funcs import stopFunCombined, iVarY, iVarVY, iVarT
+from stop_funcs import stopFunCombined, calcEvents, iVarY, iVarVX, iVarVY, iVarVZ, iVarT
 
-def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, \
+def orbit_geom_old(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.05), \
                retarr=False, retdv=False, retevout=False, T=None, **kwargs):
     ''' Orbit geometry calculation function.
         Propagates orbit for 'nrevs' revolutions using findVLimits function \
@@ -44,8 +44,9 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, \
     nrevs : int
         Number of revolutions.
         
-    dv0 : float
-        Initial step size for delta-v calculation.
+    dv0 : (float, float)
+        Initial step size for delta-v calculation at first and consequent
+        iterations.
         
     Optional
     --------
@@ -100,7 +101,7 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, \
     sn = len(s0)
     
     s1 = s0.copy()
-    v = findVLimits(mu, s1, beta[0], {'left':evLeft, 'right':evRight}, dv0, **kwargs)
+    v = findVLimits(mu, s1, beta[0], {'left':evLeft, 'right':evRight}, dv0[0], **kwargs)
     s1[3:5] += v
     DV = v.copy().reshape(1, -1)
     if (T is None) and (evStop[0]['ivar'] == iVarT):
@@ -116,7 +117,7 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, \
     for i in range(nrevs):
         s1 = arr[-1, :sn].copy()
 #        dv0 = np.linalg.norm(DV[-1])
-        v = findVLimits(mu, s1, beta[1], events, dv0, **kwargs)
+        v = findVLimits(mu, s1, beta[1], events, dv0[1], **kwargs)
         s1[3:5] += v
         cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined,
                             events = evGeom + evStop,
@@ -163,6 +164,296 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=0.05, \
     zlim = (np.min(Zm), np.max(Zp), np.max(Zm), np.min(Zp))
     
     ret = [(xlim, ylim, zlim)]
+    
+    if retarr:
+        ret.append(arr)
+        
+    if retdv:
+        ret.append(DV)
+    
+    if retevout:
+        ret.append(evout)
+        
+    if len(ret) == 1:
+        return ret[0]
+    
+    return tuple(ret)    
+    
+
+def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.05), \
+               retarr=False, retdv=False, retevout=False, T=None, **kwargs):
+    ''' Orbit geometry calculation function.
+        Propagates orbit for 'nrevs' revolutions using findVLimits function \
+        after each revolution for station-keeping.
+    
+    Parameters
+    ----------
+
+    mu : scalar
+        CRTBP mu1 coefficient.
+
+    s0 : array_like with 6 components
+        Initial spacecraft state vector (x0,y0,z0,vx0,vy0,vz0).
+
+    events : dict
+        events['left'] should be termination event list for left boundary
+        events['right'] should be termination event list for left boundary
+        Optionally:
+        events['stop'] should be termination event (list of events) that
+        defines one revolution
+        
+    center : float
+        Coordinate system center for X-axis. Necessary for separation
+        orbit geometry along X-axis.
+
+    beta : list of 2 floats
+        Angles for initial (beta[0]) and all others (beta[1]) calculation
+        of correction burns (delta-v).
+        
+    nrevs : int
+        Number of revolutions.
+        
+    dv0 : (float, float)
+        Initial step size for delta-v calculation at first and consequent
+        iterations.
+        
+    Optional
+    --------
+    
+    T : float
+        Defines one revolution period if events['stop'] wasn't defined.
+    
+    retarr : bool
+        If True function returns full orbit array (all integration steps).
+        
+    retdv : bool
+        If True function returns all calculated correction burns (delta-v).
+            
+    retevout : bool
+        If True function returns all calculated geometric events.
+              
+    Returns
+    -------
+    
+    lims : tuple of 3 tuples of 4 floats
+        (min(X|X<0), max(X|X>0), max(X|X<0), min(X|X>0)) and the same 
+        for Y and Z coordinates. X is relative to 'center' coordinate.
+    
+    arr : numpy array of (N, len(s0)+1+2+len(evStop)) shape
+        Spacecraft 'extended' state vectors for all (N) integration steps.
+        
+    dv : numpy array of (nrevs, 2) shape
+        All calculated correction burns (delta-v) in XY plane.
+        
+    evout : numpy array of (M, 1 + len(s0)+1+2+len(evStop)) shape
+        Each row consists of: index of event and 'extended' state vector.
+        
+          
+    '''
+    evVX = {'ivar':iVarVX, 'stopval':   0.0, 'direction': 0, 'isterminal':False, 'corr':True } #0
+    evVY = {'ivar':iVarVY, 'stopval':   0.0, 'direction': 0, 'isterminal':False, 'corr':True } #1
+    evVZ = {'ivar':iVarVZ, 'stopval':   0.0, 'direction': 0, 'isterminal':False, 'corr':True } #2
+    # default "one revolution" terminal event
+    evTrm = {'ivar':iVarT, 'stopval': np.pi, 'direction': 0, 'isterminal':True,  'corr':False}
+    evLeft = events['left']
+    evRight = events['right']
+    evStop = events.get('stop', evTrm)
+    if type(evLeft) is not list:
+        evLeft = [evLeft]
+    if type(evRight) is not list:
+        evRight = [evRight]
+    if type(evStop) is not list:
+        evStop = [evStop]
+
+    evGeom = [evVX, evVY, evVZ]
+    evout = []
+    
+    sn = len(s0)
+    
+    s1 = s0.copy()
+    v = findVLimits(mu, s1, beta[0], {'left':evLeft, 'right':evRight}, dv0[0], **kwargs)
+    s1[3:5] += v
+    DV = v.copy().reshape(1, -1)
+    if (T is None) and (evStop[0]['ivar'] == iVarT):
+        T = 2*evStop[0]['stopval']
+    else:
+        T = 100*np.pi
+#    print('T=', T)
+    cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined, \
+                        events = evGeom + evStop, \
+                        out=evout, **kwargs)
+    arr = cur_rev.copy()
+    print(0, end=' ')
+    for i in range(nrevs):
+        s1 = arr[-1, :sn].copy()
+#        dv0 = np.linalg.norm(DV[-1])
+        v = findVLimits(mu, s1, beta[1], events, dv0[1], **kwargs)
+        s1[3:5] += v
+        cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined,
+                            events = evGeom + evStop,
+                            out=evout, **kwargs)
+        cur_rev[:,sn]+=arr[-1,sn]
+        arr = np.vstack((arr, cur_rev[1:]))
+        DV = np.vstack((DV, v))
+        print(i+1, end=' ')
+    
+    evout.pop(0)
+    evout = np.array([[e[0], *e[2]] for e in evout])
+    
+    lims = []
+    for i in range(3):
+        mask = (evout[:,0]==i)
+        if np.any(mask):
+            ev = evout[mask]
+            maskp = (ev[:,2] >= 0.0)
+            Cp = ev[maskp,2] if np.any(maskp) else np.array([0])
+            maskm = np.logical_not(maskp)
+            Cm = ev[maskm,2] if np.any(maskm) else np.array([0])
+        else:
+            Cp = np.array([0])
+            Cm = np.array([0])
+        lims.append([np.min(Cm), np.max(Cp), np.max(Cm), np.min(Cp)])
+       
+    ret = [lims]
+    
+    if retarr:
+        ret.append(arr)
+        
+    if retdv:
+        ret.append(DV)
+    
+    if retevout:
+        ret.append(evout)
+        
+    if len(ret) == 1:
+        return ret[0]
+    
+    return tuple(ret)
+
+
+def make_revs(mu, s0, events, nrevs=10, \
+              beta=(90, 0), dv0=(0.05, 0.05), maxit=100, \
+              retarr=False, retdv=False, retevout=False, debug=False, \
+              prnt=True, **kwargs):
+    ''' Calculate N revolutions of orbit.
+        Propagates orbit for 'nrevs' revolutions using findVLimits function \
+        after each revolution for station-keeping.
+    
+    Parameters
+    ----------
+
+    mu : scalar
+        CRTBP mu1 coefficient.
+
+    s0 : array_like with 6 components
+        Initial spacecraft state vector (x0,y0,z0,vx0,vy0,vz0).
+
+    events : dict
+        events['left'] should be termination event list for left boundary
+        events['right'] should be termination event list for left boundary
+        Optionally:
+        events['stop'] should be termination event (list of events) that
+        defines one revolution
+        
+    nrevs : int
+        Number of revolutions.
+    
+    beta : list of 2 floats
+        Angles for initial (beta[0]) and all others (beta[1]) calculation
+        of correction burns (delta-v).
+        
+    dv0 : (float, float)
+        Initial step size for delta-v calculation at first and consequent
+        iterations.
+        
+    Optional
+    --------
+       
+    retarr : bool
+        If True function returns full orbit array (all integration steps).
+        
+    retdv : bool
+        If True function returns all calculated correction burns (delta-v).
+            
+    retevout : bool
+        If True function returns all calculated geometric events.
+              
+    Returns
+    -------
+    
+    arr : numpy array of (N, len(s0)+1) shape
+        Spacecraft time-extended state vectors for all (N) integration steps.
+        
+    dv : numpy array of (nrevs, 2) shape
+        All calculated correction burns (delta-v) in XY plane.
+        
+    evout : list of [int, int, np.array]
+        Each row consists of: index of event, count of event occurences
+        and 'extended' state vector.
+        
+          
+    '''
+    T = 2*np.pi
+    # default "one revolution" terminal event
+    evTrm = {'ivar':iVarT, 'stopval': np.pi, 'direction': 0, 'isterminal':True,  'corr':False}
+    evLeft = events['left']
+    evRight = events['right']
+    evStop = events.get('stop', evTrm)
+    if type(evLeft) is not list:
+        evLeft = [evLeft]
+    if type(evRight) is not list:
+        evRight = [evRight]
+    if type(evStop) is not list:
+        evStop = [evStop]
+
+    evout = []
+    
+    sn = len(s0)
+    
+    s1 = s0.copy()
+    if debug:
+        v, it = findVLimits_debug(mu, s1, beta[0], {'left':evLeft, 'right':evRight}, \
+                                  dv0[0], maxit=maxit, retit=True, **kwargs)
+    else:
+        v, it = findVLimits(mu, s1, beta[0], {'left':evLeft, 'right':evRight}, \
+                            dv0[0], maxit=maxit, retit=True, **kwargs)
+    if it == maxit:
+        return None
+    
+    s1[3:5] += v
+    DV = v.copy().reshape(1, -1)
+    if (T is None) and (evStop[0]['ivar'] == iVarT):
+        T = 2*evStop[0]['stopval']
+    else:
+        T = 100*np.pi
+#    print('T=', T)
+    cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined, \
+                        events = evStop, \
+                        out=evout, **kwargs)
+    arr = cur_rev[:,:sn+1].copy()
+    if prnt: 
+        print(0, end=' ')
+    for i in range(nrevs):
+        s1 = arr[-1, :sn].copy()
+        if debug:
+            v, it = findVLimits_debug(mu, s1, beta[1], events, 
+                                dv0[1], maxit=maxit, retit=True, **kwargs)
+        else:
+            v, it = findVLimits(mu, s1, beta[1], events, 
+                                dv0[1], maxit=maxit, retit=True, **kwargs)
+        if it == maxit:
+            return None
+        s1[3:5] += v
+        cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined,
+                            events = evStop,
+                            out=evout, **kwargs)
+        cur_rev[:,sn]+=arr[-1,sn]
+        arr = np.vstack((arr, cur_rev[1:, :sn+1]))
+        DV = np.vstack((DV, v))
+        if prnt:
+            print(i+1, end=' ')
+    
+    ret = []
     
     if retarr:
         ret.append(arr)
