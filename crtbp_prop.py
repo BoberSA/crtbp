@@ -51,7 +51,8 @@ def propCrtbp(mu, s0, tspan, **kwargs):
     prop.set_initial_value(s0, tspan[0])
     prop.set_f_params(*[mu])
     if 'int_param' in kwargs:
-        prop.set_integrator('dopri5', **kwargs['int_param'])
+        method = kwargs['int_param'].get('method', 'dopri5')
+        prop.set_integrator(method, **kwargs['int_param'])
     else:
         prop.set_integrator('dopri5')
     lst = []
