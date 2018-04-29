@@ -181,7 +181,8 @@ def orbit_geom_old(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.
     
 
 def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.05), \
-               retarr=False, retdv=False, retevout=False, T=None, **kwargs):
+               retarr=False, retdv=False, retevout=False, T=None, \
+               stopf=stopFunCombined, **kwargs):
     ''' Orbit geometry calculation function.
         Propagates orbit for 'nrevs' revolutions using findVLimits function \
         after each revolution for station-keeping.
@@ -279,7 +280,7 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.05),
     else:
         T = 100*np.pi
 #    print('T=', T)
-    cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined, \
+    cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopf, \
                         events = evGeom + evStop, \
                         out=evout, **kwargs)
     arr = cur_rev.copy()
@@ -289,7 +290,7 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.05),
 #        dv0 = np.linalg.norm(DV[-1])
         v = findVLimits(mu, s1, beta[1], events, dv0[1], **kwargs)
         s1[3:5] += v
-        cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined,
+        cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopf,
                             events = evGeom + evStop,
                             out=evout, **kwargs)
         cur_rev[:,sn]+=arr[-1,sn]
@@ -334,7 +335,7 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.05),
 def make_revs(mu, s0, events, nrevs=10, \
               beta=(90, 0), dv0=(0.05, 0.05), maxit=100, \
               retarr=False, retdv=False, retevout=False, debug=False, \
-              prnt=True, **kwargs):
+              prnt=True, stopf=stopFunCombined, **kwargs):
     ''' Calculate N revolutions of orbit.
         Propagates orbit for 'nrevs' revolutions using findVLimits function \
         after each revolution for station-keeping.
@@ -427,7 +428,7 @@ def make_revs(mu, s0, events, nrevs=10, \
     else:
         T = 100*np.pi
 #    print('T=', T)
-    cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined, \
+    cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopf, \
                         events = evStop, \
                         out=evout, **kwargs)
     arr = cur_rev[:,:sn+1].copy()
@@ -444,7 +445,7 @@ def make_revs(mu, s0, events, nrevs=10, \
         if it == maxit:
             return None
         s1[3:5] += v
-        cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined,
+        cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopf,
                             events = evStop,
                             out=evout, **kwargs)
         cur_rev[:,sn]+=arr[-1,sn]
