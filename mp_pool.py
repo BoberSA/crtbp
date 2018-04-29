@@ -6,7 +6,7 @@ Created on Fri Apr 20 21:57:01 2018
 """
 
 import multiprocessing as mp
-from math import ceil
+from math import floor
 import time
 import sys
 
@@ -62,7 +62,7 @@ def async_calc(arg):
     t0 = time.clock()
     arg['result']=arg['fun'](arg['job'])
     t = time.clock() - t0
-    print('<job time: %.2f s>'%t)
+    print('<job %d CPU time: %.2f s>'%(arg['id'],t))
     arg.pop('queue').put(arg)    
 
 def pool_run(p, jobs, calc, writer):
@@ -139,10 +139,9 @@ def pool_run(p, jobs, calc, writer):
     listener.start()
     listener.join()
     dt = time.clock() - t0
-    dtfrac = round((dt - ceil(dt))*100)
-    print('<time spent: %02d:%02d:%02d:%02d.%02d dd:hh:mm:ss.ss>' % (*convert_to_d_h_m_s(dt), dtfrac))
-    print('<time spent: %.2f s>'% dt)
-    print('<sequential average time per job: %.2f s>'% (dt/len(jobs)))
+    print('<pool of %d processes finished working on %d jobs>'%(len(first_jobs), len(jobs)))
+    print('<time spent: %02d:%02d:%02d:%05.2f dd:hh:mm:ss.ss (%.2f s)>' % (*convert_to_d_h_m_s(dt),dt))
+    print('<average time per job: %.2f s>'% (dt/len(jobs)))
     
 #-----------------------------------------------------------------------------
 # user functions
@@ -153,7 +152,7 @@ def calc_job(job):
     result = job+0
 
     # emulating some work
-    i = 1000000000
+    i = 10000000
     while i:
         i-=1
       
