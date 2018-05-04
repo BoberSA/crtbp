@@ -9,7 +9,8 @@ import numpy as np
 from crtbp_prop import propCrtbp
 from find_vel import findVLimits, findVLimits_debug
 #from lagrange_pts import lagrange1, lagrange2
-from stop_funcs import stopFunCombined, calcEvents, iVarY, iVarVX, iVarVY, iVarVZ, iVarT
+from stop_funcs import stopFunCombined, stopFunCombinedInterp, calcEvents, \
+                       iVarY, iVarVX, iVarVY, iVarAX, iVarAY, iVarVZ, iVarAZ, iVarT
 
 def orbit_geom_old(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.05), \
                retarr=False, retdv=False, retevout=False, T=None, **kwargs):
@@ -109,7 +110,7 @@ def orbit_geom_old(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.
     else:
         T = 100*np.pi
 #    print('T=', T)
-    cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined, \
+    cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombinedInterp, \
                         events = evGeom + evStop, \
                         out=evout, **kwargs)
     arr = cur_rev.copy()
@@ -119,7 +120,7 @@ def orbit_geom_old(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.
 #        dv0 = np.linalg.norm(DV[-1])
         v = findVLimits(mu, s1, beta[1], events, dv0[1], **kwargs)
         s1[3:5] += v
-        cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombined,
+        cur_rev = propCrtbp(mu, s1, [0, T], stopf=stopFunCombinedInterp,
                             events = evGeom + evStop,
                             out=evout, **kwargs)
         cur_rev[:,sn]+=arr[-1,sn]
@@ -251,9 +252,9 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.05),
         
           
     '''
-    evVX = {'ivar':iVarVX, 'stopval':   0.0, 'direction': 0, 'isterminal':False, 'corr':True } #0
-    evVY = {'ivar':iVarVY, 'stopval':   0.0, 'direction': 0, 'isterminal':False, 'corr':True } #1
-    evVZ = {'ivar':iVarVZ, 'stopval':   0.0, 'direction': 0, 'isterminal':False, 'corr':True } #2
+    evVX = {'ivar':iVarVX, 'dvar':iVarAX, 'stopval':   0.0, 'direction': 0, 'isterminal':False, 'corr':True, 'kwargs':{'mu':mu} } #0
+    evVY = {'ivar':iVarVY, 'dvar':iVarAY, 'stopval':   0.0, 'direction': 0, 'isterminal':False, 'corr':True, 'kwargs':{'mu':mu} } #1
+    evVZ = {'ivar':iVarVZ, 'dvar':iVarAZ, 'stopval':   0.0, 'direction': 0, 'isterminal':False, 'corr':True, 'kwargs':{'mu':mu} } #2
     # default "one revolution" terminal event
     evTrm = {'ivar':iVarT, 'stopval': np.pi, 'direction': 0, 'isterminal':True,  'corr':False}
     evLeft = events['left']
