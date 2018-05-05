@@ -17,7 +17,8 @@ import matplotlib.pyplot as plt
 from crtbp_prop import propCrtbp
 from find_vel import findVPlanes
 from lagrange_pts import lagrange1, lagrange2
-from stop_funcs import stopFunCombined, iVarX, iVarY, iVarAlpha
+from stop_funcs import stopFunCombined, iVarX, iVarY, iVarAlpha, \
+                                        iVarVX, iVarVY, iVarDAlpha
 
 # constants
 Sm =  1.9891e30 # mass of the Sun
@@ -28,7 +29,7 @@ L = [lagrange1(mu1), lagrange2(mu1)] # L1, L2 positions
 
 rtol = 1e-12 # integration relative tolerance
 nmax = 1e6 # max number of integration steps
-int_param = {'atol':rtol, 'rtol':rtol, 'nsteps':nmax}
+int_param = {'atol':rtol, 'rtol':rtol, 'nsteps':nmax, 'method':'dop853'}
 
 # planes location
 leftp = mu1 + 500000 / ER
@@ -52,20 +53,21 @@ y0[3:5] = v
 
 # events
 ev_names = ['X:0', 'alpha:120', 'Y:0', 'alpha:60']
-eventX = {'ivar':iVarX, 'stopval':L[1], 'direction': 0, 'isterminal':False, 'corr':True}
-eventY = {'ivar':iVarY, 'stopval':   0, 'direction':1, 'isterminal':True,  'corr':True}
-eventA = {'ivar':iVarAlpha, 'stopval': np.deg2rad(120), 'direction':0, 'isterminal':False, 'corr':True, 'kwargs':{'center':L[1]}}
-eventB = {'ivar':iVarAlpha, 'stopval': np.deg2rad(60), 'direction':0, 'isterminal':False, 'corr':True, 'kwargs':{'center':L[1]}}
+eventX = {'ivar':iVarX, 'dvar':iVarVX, 'stopval':L[1], 'direction': 0, 'isterminal':False, 'corr':True}
+eventY = {'ivar':iVarY, 'dvar':iVarVY, 'stopval':   0, 'direction':1, 'isterminal':True,  'corr':True}
+eventA = {'ivar':iVarAlpha, 'dvar':iVarDAlpha, 'stopval': np.deg2rad(120), 'direction':0, 'isterminal':False, 'corr':True, 'kwargs':{'center':L[1]}}
+eventB = {'ivar':iVarAlpha, 'dvar':iVarDAlpha, 'stopval': np.deg2rad(60), 'direction':0, 'isterminal':False, 'corr':True, 'kwargs':{'center':L[1]}}
 evout = []
 
 # integrate CRTBP equations of motion with event detection routine
 arr = propCrtbp(mu1, y0, [0, np.pi], stopf=stopFunCombined, events = [eventX, eventA, eventY, eventB], out=evout, int_param=int_param)
-
+evout.pop(0)
 # plot orbit projection in XY plane
+plt.figure(figsize=(10,10))
 plt.plot(arr[:,0],arr[:,1],'.-')
 plt.axis('equal')
 
 # plot events
-for ie, s in evout:
+for ie, _, s in evout:
     plt.plot(s[0], s[1], '+k')
     plt.text(s[0], s[1], ' [%d] %s' % (ie, ev_names[ie]))    

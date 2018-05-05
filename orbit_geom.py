@@ -307,14 +307,17 @@ def orbit_geom(mu, s0, events, center, beta=(90, 0), nrevs=10, dv0=(0.05, 0.05),
         mask = (evout[:,0]==i)
         if np.any(mask):
             ev = evout[mask]
-            maskp = (ev[:,2] >= 0.0)
-            Cp = ev[maskp,2] if np.any(maskp) else np.array([0])
+            maskp = (ev[:,i+1] >= (center if i == 0 else 0.0))
+            Cp = ev[maskp,i+1] if np.any(maskp) else np.array([0.0])
             maskm = np.logical_not(maskp)
-            Cm = ev[maskm,2] if np.any(maskm) else np.array([0])
+            Cm = ev[maskm,i+1] if np.any(maskm) else np.array([0.0])
         else:
-            Cp = np.array([0])
-            Cm = np.array([0])
-        lims.append([np.min(Cm), np.max(Cp), np.max(Cm), np.min(Cp)])
+            Cp = np.array([0.0])
+            Cm = np.array([0.0])
+        lims.append([np.min(Cm) - (center if i == 0 else 0.0), 
+                     np.max(Cp) - (center if i == 0 else 0.0), 
+                     np.max(Cm) - (center if i == 0 else 0.0), 
+                     np.min(Cp) - (center if i == 0 else 0.0)])
        
     ret = [lims]
     

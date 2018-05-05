@@ -140,7 +140,9 @@ def iVarAX(t, s, **kwargs):
     -------
     AX - projection of acceleration vector to X axis
     '''
-    return crtbp(t, s, kwargs['mu'])[3]
+#    print('a', a)
+    a = crtbp(t, s, kwargs['mu'])
+    return a[3]
 
 def iVarAY(t, s, **kwargs):
     ''' Independent variable function that returns AY - projection of \
@@ -290,6 +292,36 @@ def iVarAlpha(t, s, **kwargs):
         point at X-axis.
     '''    
     return math.atan2(s[1], s[0]-kwargs.get('center', 0))
+
+def iVarDAlpha(t, s, **kwargs):
+    ''' Independent variable function that returns angle Alpha between \
+    direction to SC in XY plane and X axis. Alpha measured in radians and \
+    calculated relative to specified center point at X-axis. \
+    Positive direction of angle is counter clockwise with zero at X-axis.
+    Should be used in stopFunCombined.
+    
+    Parameters
+    ----------
+    t : scalar
+        Dimensionless time (same as angle of system rotation)        
+    s : array_like with 6 components
+        State vector of massless spacecraft (x,y,z,vx,vy,vz)
+    center : scalar
+        Coordinate of center point relative to which angle will be
+        calculated
+        
+    Returns
+    -------
+    
+    alpha : scalar
+        Angle in radians calculated relative to specified center 
+        point at X-axis.
+    '''    
+    # omega = cross(r, v)/dot(r,r)
+    v = s[3:5]
+    r = [s[0]-kwargs.get('center', 0), s[1]]
+    omega = (r[0]*v[1]-r[1]*v[0])/(r[0]**2+r[1]**2)
+    return omega
 
 def iVarAlpha2(t, s, **kwargs):
     ''' Independent variable function that returns angle Alpha between \
@@ -768,6 +800,7 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
             if cur_cnt[i] > 0:
                 cur_cnt[i] -= 1
             last_s = lst[-1].copy() # FIX: .copy() is important here
+            corr_f = True # if correction process converged between lst[-2] and lst[-1]
             if corr:
                 # calculation of corrected state vector using Newton's method
                 # print('[%d]%f<>%f<>%f' % (i, prev_iv, stopval, cur_iv))
@@ -791,17 +824,21 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
                     s_n = prop.integrate(tn)
                     cur_iv_ = ivar(tn, s_n, **evkwargs)
                 
-                cur_ivs_ = []
-                for event_ in events:
-                    cur_ivs_.append(event_['ivar'](tn, s_n, **event.get('kwargs', {})))               
+                if ((tn >= lst[-2][sn-1]) and (tn <= lst[-1][sn-1])) or ((tn <= lst[-2][sn-1]) and (tn >= lst[-1][sn-1])):                
+                    cur_ivs_ = []
+                    for event_ in events:
+                        cur_ivs_.append(event_['ivar'](tn, s_n, **event.get('kwargs', {})))               
                 
-                last_s = np.asarray([*s_n,tn,*cur_ivs_])
-                
-            out_.append([i, (-1 if cur_cnt[i]==-1 else init_cnt-cur_cnt[i]), last_s])
-            if isterminal and ((cur_cnt[i] == -1) or (cur_cnt[i] == 0)):
-                terminal = True
-                if corr:
-                    trm_evs.append(last_s)
+                    last_s = np.asarray([*s_n,tn,*cur_ivs_])
+                else:
+                    corr_f = False # correction process doesn't converged between lst[-2] and lst[-1]
+                    #TODO something with cur_cnt
+            if corr_f:
+                out_.append([i, (-1 if cur_cnt[i]==-1 else init_cnt-cur_cnt[i]), last_s])
+                if isterminal and ((cur_cnt[i] == -1) or (cur_cnt[i] == 0)):
+                    terminal = True
+                    if corr:
+                        trm_evs.append(last_s)
     
     if out_:
         tsort = kwargs.get('tsort', True)
