@@ -240,10 +240,10 @@ def iVarDR(t, s, **kwargs):
             Acceleration value along radius-vector
     '''
     # projection of acceleration vector to radius-vector
-    a = crtbp(t, s, kwargs['mu'])[3:]    
+    v = s[3:]   
     r = s[:3] - kwargs.get('center', np.zeros(3))
-    r = r / (r[0]**2+r[1]**2+r[2]**2)
-    return r[0]*a[0]+r[1]*a[1]+r[2]*a[2]
+    r = r / math.sqrt(r[0]**2+r[1]**2+r[2]**2)
+    return r[0]*v[0]+r[1]*v[1]+r[2]*v[2]
 
 def iVarR2(t, s, **kwargs):
     ''' Independent variable function that returns length squared of \
@@ -809,7 +809,7 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
                 prop.set_f_params(*[kwargs['mu']])
                 method = kwargs['int_param'].get('method', 'dopri5')
                 prop.set_integrator(method, **kwargs['int_param'])
-                rtol = kwargs['int_param']['rtol']
+                atol = kwargs['int_param']['atol']
 #                print('SN', sn)
                 s_n = lst[-2][:sn-1]
                 tn = lst[-2][sn-1]
@@ -818,20 +818,28 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
                 evkwargs = event.get('kwargs', {})        
                 cur_iv_ = prev_iv
                 
-                while math.fabs(cur_iv_ - stopval) > rtol:
+                j = 0
+                maxit = kwargs.get('maxit', 100)
+                while math.fabs(cur_iv_ - stopval) > atol and j < maxit:
                     prop.set_initial_value(s_n, tn)
                     tn -= (cur_iv_-stopval)/dvar(tn, s_n, **evkwargs)
                     s_n = prop.integrate(tn)
                     cur_iv_ = ivar(tn, s_n, **evkwargs)
+                    j += 1
+                    
+                if j == maxit:
+                    print('Newton alarm')
                 
-                if ((tn >= lst[-2][sn-1]) and (tn <= lst[-1][sn-1])) or ((tn <= lst[-2][sn-1]) and (tn >= lst[-1][sn-1])):                
+                if ((tn >= lst[-2][sn-1]) and (tn <= lst[-1][sn-1])) or \
+                   ((tn <= lst[-2][sn-1]) and (tn >= lst[-1][sn-1])):                
                     cur_ivs_ = []
                     for event_ in events:
-                        cur_ivs_.append(event_['ivar'](tn, s_n, **event.get('kwargs', {})))               
+                        cur_ivs_.append(event_['ivar'](tn, s_n, **event_.get('kwargs', {})))               
                 
                     last_s = np.asarray([*s_n,tn,*cur_ivs_])
                 else:
                     corr_f = False # correction process doesn't converged between lst[-2] and lst[-1]
+                    print('Newton correction is out of range')
                     #TODO something with cur_cnt
             if corr_f:
                 out_.append([i, (-1 if cur_cnt[i]==-1 else init_cnt-cur_cnt[i]), last_s])
