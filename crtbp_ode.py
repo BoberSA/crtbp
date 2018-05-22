@@ -6,8 +6,11 @@ Created on Wed Mar 15 13:50:37 2017
 """
 
 import numpy as np
+from numba import jit, njit #guvectorize
+from numba import compiler, types
+from numba.targets import registry
 
-def crtbp(t, s, mu):
+def _crtbp(t, s, mu):
     ''' Right part of Circular Restricted Three Body Problem ODE
         Dimensionless formulation.
         See Murray, Dermott 'Solar System Dynamics'.
@@ -45,4 +48,10 @@ def crtbp(t, s, mu):
     dy1dt = -2 * x1 + y - yzcmn * y;
     dz1dt =             - yzcmn * z;
     
-    return np.array([x1, y1, z1, dx1dt, dy1dt, dz1dt])
+    ds = np.array([x1, y1, z1, dx1dt, dy1dt, dz1dt])
+    
+    return ds
+
+crtbp = compiler.compile_isolated(_crtbp, [types.double, types.double[:], types.double], return_type=types.double[:]).entry_point
+#crtbp = registry.CPUDispatcher(_crtbp)
+#crtbp.add_overload(crtbp_cr)
