@@ -33,7 +33,17 @@ def lagrange_pts(mu):
     L[4, :2] = lagrange5(mu)
     return L
     
-    
+
+from numba import jit, njit
+
+@jit
+def opt(x, mu):
+    #print('x', x)
+    #print('mu', mu)
+    y = np.zeros(6)
+    y[0] = x[0]
+    return crtbp(0., y, mu)[3]
+
 def lagrange1(mu):
     ''' Numerically calculate position of Lagrange L1 point.
         Uses scipy.optimize.root to find where acceleration in X direction
@@ -61,7 +71,7 @@ def lagrange1(mu):
 #    a = (mu2/(3*mu))**(1/3)
 #    l1 = a-1/3*a**2-1/9*a**3-23/81*a**4
 #    return scipy.optimize.root(lambda x:crtbp(0, [x, 0, 0, 0, 0, 0], mu)[3], mu-l1).x
-    return scipy.optimize.root(lambda x:crtbp(0, [x, 0, 0, 0, 0, 0], mu)[3], 0.5).x[0]
+    return scipy.optimize.root(opt, 0.5, args=(mu,)).x[0]
 
 def lagrange2(mu):
     ''' Numerically calculate position of Lagrange L2 point.
@@ -90,7 +100,8 @@ def lagrange2(mu):
 #    a = (mu2/(3*mu))**(1/3)
 #    l2 = a+1/3*a**2-1/9*a**3-31/81*a**4
 #    return scipy.optimize.root(lambda x:crtbp(0, [x, 0, 0, 0, 0, 0], mu)[3], mu+l2).x
-    return scipy.optimize.root(lambda x:crtbp(0, [x, 0, 0, 0, 0, 0], mu)[3], 2.).x[0]
+    #return scipy.optimize.root(lambda x:crtbp(0., np.array([x, 0., 0., 0., 0., 0.]), mu)[3], 2.).x[0]
+    return scipy.optimize.root(opt, 2.0, args=(mu,)).x[0]
 
 def lagrange3(mu):
     ''' Numerically calculate position of Lagrange L3 point.
@@ -115,7 +126,8 @@ def lagrange3(mu):
     crtbp_ode.crtbp.
           
     '''
-    return scipy.optimize.root(lambda x:crtbp(0, [x, 0, 0, 0, 0, 0], mu)[3], -1.).x[0]
+    #return scipy.optimize.root(lambda x:crtbp(0., np.array([x, 0., 0., 0., 0., 0.]), mu)[3], -1.).x[0]
+    return scipy.optimize.root(opt, -1.0, args=(mu,)).x[0]
 
 def lagrange4(mu):
     ''' Return position of Lagrange L4 point.
