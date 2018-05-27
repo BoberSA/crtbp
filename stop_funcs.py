@@ -10,10 +10,16 @@ import math
 from scipy.interpolate import interp1d
 from scipy.integrate import ode
 from crtbp_ode import crtbp
+#from numba import njit
+import matplotlib.pyplot as plt
 
 '''
     NEW FUNCTIONS 16-07-2017
 '''
+
+#def sign(x):
+#    return (1.0 if (x) > 0.0 else (-1.0 if (x) < 0.0 else 0.0))
+
 
 def iVarX(t, s, **kwargs):
     ''' Independent variable function that returns X coordinate \
@@ -778,10 +784,12 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
             out.append(cur_cnt)
         else:
             out[0] = cur_cnt
-        lst.append(np.asarray([*s,t,*cur_ivs]))
+#        lst.append(np.asarray([*s,t,*cur_ivs]))
+        lst.append([*s,t,*cur_ivs])
         return 0
         
-    lst.append(np.asarray([*s,t,*cur_ivs]))
+#    lst.append(np.asarray([*s,t,*cur_ivs]))
+    lst.append([*s,t,*cur_ivs])
 
     cur_cnt = out[0]
     for i, event in enumerate(events):
@@ -813,6 +821,7 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
 #                print('SN', sn)
                 s_n = lst[-2][:sn-1]
                 tn = lst[-2][sn-1]
+                maxdt = lst[-1][sn-1]-tn
                 ivar = event['ivar']
                 dvar = event['dvar']
                 evkwargs = event.get('kwargs', {})        
@@ -822,7 +831,11 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
                 maxit = kwargs.get('maxit', 100)
                 while math.fabs(cur_iv_ - stopval) > atol and j < maxit:
                     prop.set_initial_value(s_n, tn)
-                    tn -= (cur_iv_-stopval)/dvar(tn, s_n, **evkwargs)
+                    cur_dt = (cur_iv_-stopval)/dvar(tn, s_n, **evkwargs)
+                    # in case of very big steps (when dvar are very small value)
+                    if ((tn - cur_dt) < lst[-2][sn-1]) or ((tn - cur_dt) > lst[-1][sn-1]):
+                        cur_dt = -maxdt*0.5
+                    tn -= cur_dt
                     s_n = prop.integrate(tn)
                     cur_iv_ = ivar(tn, s_n, **evkwargs)
                     j += 1
@@ -836,7 +849,8 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
                     for event_ in events:
                         cur_ivs_.append(event_['ivar'](tn, s_n, **event_.get('kwargs', {})))               
                 
-                    last_s = np.asarray([*s_n,tn,*cur_ivs_])
+#                    last_s = np.array([*s_n,tn,*cur_ivs_])
+                    last_s = [*s_n,tn,*cur_ivs_]
                 else:
                     corr_f = False # correction process doesn't converged between lst[-2] and lst[-1]
                     print('Newton correction is out of range')
@@ -869,6 +883,151 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
         return -1
     
     return 0
+
+def stopFunCombined_debug(t, s, lst, events, out=[], **kwargs):
+    ''' Same as stopFunCombined but for debug purposes '''
+
+    if not events:
+        return 0
+    
+    terminal = False
+    cur_ivs = []
+    sn = s.shape[0] + 1
+    
+    trm_evs = []
+    out_ = []
+    
+    for event in events:
+        ivar = event['ivar']
+        evkwargs = event.get('kwargs', {})        
+        cur_iv = ivar(t, s, **evkwargs)
+        cur_ivs.append(cur_iv)
+
+    if not lst: # fast way to check if lst is empty
+        cur_cnt = []
+        for event in events:
+            cur_cnt.append(event.get('count', -1))
+        if not out:
+            out.append(cur_cnt)
+        else:
+            out[0] = cur_cnt
+#        lst.append(np.asarray([*s,t,*cur_ivs]))
+        lst.append([*s,t,*cur_ivs])
+        return 0
+        
+#    lst.append(np.asarray([*s,t,*cur_ivs]))
+    lst.append([*s,t,*cur_ivs])
+
+    cur_cnt = out[0]
+    for i, event in enumerate(events):
+        stopval = event.get('stopval', 0)
+        direction = event.get('direction', 0)
+        corr = event.get('corr', True)
+        isterminal = event.get('isterminal', True)
+        init_cnt = event.get('count', -1)
+        
+        cur_iv = cur_ivs[i]
+        prev_iv = lst[-2][sn+i]
+
+        f1 = (prev_iv < stopval) and (cur_iv > stopval) and ((direction == 1) or (direction == 0))
+        f2 = (prev_iv > stopval) and (cur_iv < stopval) and ((direction == -1) or (direction == 0))
+        if (f1 or f2) and ((cur_cnt[i] == -1) or (cur_cnt[i] > 0)):
+            if cur_cnt[i] > 0:
+                cur_cnt[i] -= 1
+            last_s = lst[-1].copy() # FIX: .copy() is important here
+            corr_f = True # if correction process converged between lst[-2] and lst[-1]
+            if corr:
+                # calculation of corrected state vector using Newton's method
+                # print('[%d]%f<>%f<>%f' % (i, prev_iv, stopval, cur_iv))
+                
+                prop = ode(crtbp)
+                prop.set_f_params(*[kwargs['mu']])
+                method = kwargs['int_param'].get('method', 'dopri5')
+                prop.set_integrator(method, **kwargs['int_param'])
+                atol = kwargs['int_param']['atol']
+#                print('SN', sn)
+                s_n = lst[-2][:sn-1]
+                tn = lst[-2][sn-1]
+                maxdt = lst[-1][sn-1]-tn
+                ivar = event['ivar']
+                dvar = event['dvar']
+                evkwargs = event.get('kwargs', {})        
+                cur_iv_ = prev_iv
+                
+                j = 0
+                maxit = kwargs.get('maxit', 100)
+                #debug
+                debug_lst = [[cur_iv_, tn]]
+                #
+                while math.fabs(cur_iv_ - stopval) > atol and j < maxit:
+                    prop.set_initial_value(s_n, tn)
+                    cur_dt = (cur_iv_-stopval)/dvar(tn, s_n, **evkwargs)
+                    # in case of very big steps (when dvar are very small value)
+                    if ((tn - cur_dt) < lst[-2][sn-1]) or ((tn - cur_dt) > lst[-1][sn-1]):
+                        cur_dt = -maxdt*0.5
+                    tn -= cur_dt
+                    s_n = prop.integrate(tn)
+                    cur_iv_ = ivar(tn, s_n, **evkwargs)
+                    #debug
+                    debug_lst.append([cur_iv_, tn])
+                    #
+                    j += 1
+                
+                if j == maxit:
+                    print('Newton alarm')
+                
+                if ((tn >= lst[-2][sn-1]) and (tn <= lst[-1][sn-1])) or \
+                   ((tn <= lst[-2][sn-1]) and (tn >= lst[-1][sn-1])):                
+                    cur_ivs_ = []
+                    for event_ in events:
+                        cur_ivs_.append(event_['ivar'](tn, s_n, **event_.get('kwargs', {})))               
+                
+#                    last_s = np.array([*s_n,tn,*cur_ivs_])
+                    last_s = [*s_n,tn,*cur_ivs_]
+                else:
+                    corr_f = False # correction process doesn't converged between lst[-2] and lst[-1]
+                    print('Newton correction is out of range')
+                    #TODO something with cur_cnt
+                    #debug
+                    print('i', i)
+                    print('event', event)
+                    debug_arr = np.array(debug_lst)
+                    plt.figure(figsize=(10,10))
+                    plt.plot([lst[-2][sn-1], lst[-1][sn-1]], [stopval]*2, 'r')
+                    plt.plot(debug_arr[:,1], debug_arr[:,0], '.-b')
+                    for jj, dbg_pt in enumerate(debug_arr):
+                        plt.text(dbg_pt[1], dbg_pt[0], '%d'%jj)
+                    plt.show()
+                    #    
+            if corr_f:
+                out_.append([i, (-1 if cur_cnt[i]==-1 else init_cnt-cur_cnt[i]), last_s])
+                if isterminal and ((cur_cnt[i] == -1) or (cur_cnt[i] == 0)):
+                    terminal = True
+                    if corr:
+                        trm_evs.append(last_s)
+    
+    if out_:
+        tsort = kwargs.get('tsort', True)
+        # extend 'out' list with
+        if tsort: #sorted by time events
+            out.extend(sorted(out_, key=lambda x: math.fabs(x[2][sn-1])))
+        else: #sorted by index in event list
+            out.extend(out_)
+        
+    if terminal:
+        if corr:
+            # correction of last state vector with state vector of
+            # first terminal event occured
+            if trm_evs:
+                # math.abs is needed for backward integration (negative time)
+                last_trm_ev = min(trm_evs, key=lambda x: math.fabs(x[sn-1]))
+                lst.pop()
+                lst.append(last_trm_ev)
+#            out.pop(0)
+        return -1
+    
+    return 0
+
 
 
 def calcEvents(arr, ti=6, stopf=stopFunCombined, **kwargs):
