@@ -7,9 +7,11 @@ Created on Wed Mar 15 14:16:34 2017
 
 import math
 import numpy as np
-from crtbp_prop import prop2Limits, prop2Planes, prop2Spheres
+from crtbp_prop import propCrtbp, prop2Limits, prop2Planes, prop2Spheres
+from stop_funcs import stopFunCombined
+import scipy.optimize
 
-def findVLimits(mu, y0, beta, lims, dv0, **kwargs):
+def findVLimits(mu, y0, beta, lims, dv0, retit=False, maxit=100, **kwargs):
     ''' Calculate velocity correction vector in XY plane that corresponds to \
         bounded motion around libration point in CRTBP.
         Uses modified bisection algorithm; prop2Limits.
@@ -68,7 +70,7 @@ def findVLimits(mu, y0, beta, lims, dv0, **kwargs):
        
     v = dv        
     i = 0
-    while math.fabs(dv) > dvtol and i < 100:
+    while math.fabs(dv) > dvtol and i < maxit:
         y1[3:5] = vstart + v * beta_n
         p1, _ = prop2Limits(mu, y1, lims, **kwargs)
      
@@ -78,15 +80,73 @@ def findVLimits(mu, y0, beta, lims, dv0, **kwargs):
 
         v += dv
         i += 1
-#    print(i)
+#    print('findv iterations:', i)
 #    print('%g'%v, end=' ')
+    if retit:
+        return v * beta_n, i
     return v * beta_n
 
 
-import matplotlib.pyplot as plt
-from datetime import datetime
+def time2boundary(mu1, s0, v, beta, bnd_events, **kwargs):
+    evout = []
+    s1 = s0.copy()
+    b = math.radians(beta)
+    s1[3] += v*math.cos(b)
+    s1[4] += v*math.sin(b)
+    if type(bnd_events) != list:
+        bnd_events = [bnd_events]
+    arr = propCrtbp(mu1, s1, [0, 1000], stopf=stopFunCombined, \
+              events=bnd_events, out=evout, **kwargs)
+    if len(evout) < 1:
+        plt.figure(figsize=(15,10))
+        plt.plot(arr[:,0], arr[:,1])
+        raise RuntimeError("Can't reach boundary")
+    return evout[-1][2][6]
 
-def findVLimits_debug(mu, y0, beta, lims, dv0, **kwargs):
+def findVmaxT(mu, y0, beta, dv, **kwargs):
+    ''' Calculate velocity correction vector in XY plane that corresponds to \
+        bounded motion around libration point in CRTBP.
+        Uses brent optimization of time to reach specified boundary (i.e. sphere).  
+
+    Parameters
+    ----------
+    mu : scalar
+        CRTBP mu1 coefficient.
+
+    y0 : array_like with 6 components
+        Initial spacecraft state vector (x0,y0,vx0,vy0).
+        
+    beta : scalar
+        Angle at which correction value will be found.
+
+    dv : scalar
+        Defines correction value range: [-dv, dv].
+        
+    bnd_events : event or list of events
+        Event(s) that defines boundary (i.e. sphere)
+
+    Example
+    -------
+    # Event that describes sphere with center in L2 and 1.5e6 km radius.
+    
+    _evshpere =  {'ivar':iVarR,
+                  'dvar':iVarDR,
+                  'stopval':1500000/ER,
+                  'direction': 1,
+                  'isterminal':True,
+                  'corr':True, 
+                  'kwargs':{'mu':mu1, 'center':np.array([L2, 0., 0.])}}
+    '''
+
+    f = lambda v: -time2boundary(mu, y0, v, beta, **kwargs)
+    v_max = scipy.optimize.brent(f, brack=(-dv, dv), tol=1e-16)
+    b = math.radians(beta)
+    return np.array([v_max*math.cos(b), v_max*math.sin(b)])
+    
+import matplotlib.pyplot as plt
+#from datetime import datetime
+
+def findVLimits_debug(mu, y0, beta, lims, dv0, retit=False, maxit=100, **kwargs):
     ''' Calculate velocity correction vector in XY plane that corresponds to \
         bounded motion around libration point in CRTBP.
         Uses modified bisection algorithm; prop2Limits.
@@ -137,10 +197,12 @@ def findVLimits_debug(mu, y0, beta, lims, dv0, **kwargs):
     
     rads = math.radians(beta)
     beta_n = np.array([math.cos(rads), math.sin(rads)])
-       
+    print(1)
     p, _ = prop2Limits(mu, y1, lims, **kwargs)
+    print(2)
     y1[3:5] = vstart + dv * beta_n
     p1, arr = prop2Limits(mu, y1, lims, **kwargs)
+    print(3)  
     
     if p == p1 and p == 1:
         dv = -dv
@@ -161,8 +223,8 @@ def findVLimits_debug(mu, y0, beta, lims, dv0, **kwargs):
         ax[2].plot(arr[:,1],arr[:,2], 'r')
     
     i = 0
-    while math.fabs(dv) > dvtol and i < 150:
-        #print(v, p, p1)
+    while math.fabs(dv) > dvtol and i < maxit:
+#        print(v, p, p1)
         y1[3:5] = vstart + v * beta_n
         p1, arr = prop2Limits(mu, y1, lims, **kwargs)
         
@@ -190,10 +252,12 @@ def findVLimits_debug(mu, y0, beta, lims, dv0, **kwargs):
     ax[2].set(xlabel='Y', ylabel='Z')
     
     plt.title(str([y1[0], y1[2], y1[4]]))
-    
-    plt.savefig('pics/debug '+datetime.now().isoformat().replace(':','-')+'.png')
-        
+    fig.tight_layout()
+#    plt.savefig('pics/debug '+datetime.now().isoformat().replace(':','-')+'.png')
+    print('findv iterations:', i)    
 #    print('%g'%v, end=' ')
+    if retit:
+        return v * beta_n, i
     return v * beta_n
 
 def findVPlanes(mu, s0, beta, planes, dv0, **kwargs):
