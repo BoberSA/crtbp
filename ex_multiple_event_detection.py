@@ -61,13 +61,13 @@ evout = []
 
 # integrate CRTBP equations of motion with event detection routine
 arr = propCrtbp(mu1, y0, [0, np.pi], stopf=stopFunCombined, events = [eventX, eventA, eventY, eventB], out=evout, int_param=int_param)
-evout.pop(0)
+#evout.pop(0)
 # plot orbit projection in XY plane
 plt.figure(figsize=(10,10))
 plt.plot(arr[:,0],arr[:,1],'.-')
 plt.axis('equal')
 
 # plot events
-for ie, _, s in evout:
+for ie, _, s, _ in evout:
     plt.plot(s[0], s[1], '+k')
     plt.text(s[0], s[1], ' [%d] %s' % (ie, ev_names[ie]))    
