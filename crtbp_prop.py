@@ -8,9 +8,71 @@ Created on Wed Mar 15 13:58:00 2017
 import numpy as np
 import scipy, math
 from crtbp_ode import crtbp
-from stop_funcs import stopNull, stopFunCombined
+from stop_funcs import stopNull, stopFunCombined, correctEvents
 
-def propCrtbp(mu, s0, tspan, **kwargs):
+#dopri5 = scipy.integrate.ode(crtbp).set_integrator('dopri5')
+#dop853 = scipy.integrate.ode(crtbp).set_integrator('dop853')
+
+
+#def propCrtbp(mu, s0, tspan, retarr=True, **kwargs):
+#    ''' Propagate spacecraft in CRTBP.
+#        Uses scipy.integrate.ode with 'dopri5' integrator.
+#    
+#    Parameters
+#    ----------
+#    mu : scalar
+#        CRTBP mu1 coefficient.
+#
+#    s0 : array_like with 6 components
+#        Initial spacecraft state vector (x0,y0,z0,vx0,vy0,vz0).
+#        
+#    tspan : array_like with 2 components
+#        Initial and end time.
+#        
+#    Optional
+#    --------
+#    
+#    stopf : function
+#        Solout function for integrator.
+#        
+#    int_param : dict
+#        Parameters for 'dopri5' integrator.
+#        
+#    Returns
+#    -------
+#    
+#    Yt : np.array
+#      Array of (n,6) shape of state vectors and times
+#      for each integrator step (xi,yi,zi,vxi,vyi,vzi,ti)
+#    
+#    See Also
+#    --------
+#    
+#    scipy.integrate.ode, crtbp_ode.crtbp
+#       
+#    '''
+#
+#    prop = scipy.integrate.ode(crtbp)
+#    prop.set_initial_value(s0, tspan[0])
+#    prop.set_f_params(*[mu])
+#    if 'int_param' in kwargs:
+#        method = kwargs['int_param'].get('method', 'dopri5')
+#        prop.set_integrator(method, **kwargs['int_param'])
+#    else:
+#        prop.set_integrator('dopri5')
+#    lst = []
+#    kwargs['mu'] = mu
+#    #print(kwargs)
+#    if 'stopf' in kwargs:
+#        prop.set_solout(lambda t, s: kwargs['stopf'](t, s, lst, **kwargs))
+#    else:
+#        prop.set_solout(lambda t, s: stopNull(t, s, lst))
+#    prop.integrate(tspan[1])
+#
+#    if retarr:
+#        return np.asarray(lst)
+    
+def propCrtbp(mu, s0, tspan, retarr=True, **kwargs):
     ''' Propagate spacecraft in CRTBP.
         Uses scipy.integrate.ode with 'dopri5' integrator.
     
@@ -47,14 +109,18 @@ def propCrtbp(mu, s0, tspan, **kwargs):
     scipy.integrate.ode, crtbp_ode.crtbp
        
     '''
+
     prop = scipy.integrate.ode(crtbp)
-    prop.set_initial_value(s0, tspan[0])
-    prop.set_f_params(*[mu])
+
     if 'int_param' in kwargs:
         method = kwargs['int_param'].get('method', 'dopri5')
         prop.set_integrator(method, **kwargs['int_param'])
     else:
         prop.set_integrator('dopri5')
+
+    prop.set_initial_value(s0, tspan[0])
+    prop.set_f_params(*[mu])
+
     lst = []
     kwargs['mu'] = mu
     #print(kwargs)
@@ -63,7 +129,21 @@ def propCrtbp(mu, s0, tspan, **kwargs):
     else:
         prop.set_solout(lambda t, s: stopNull(t, s, lst))
     prop.integrate(tspan[1])
-    return np.asarray(lst)
+
+    evout = kwargs.get('out', [])
+    if len(evout) > 1:
+        events = kwargs.get('events', [])
+#        cor_out = correctEvents(events, evout, prop, sn=len(s0),
+#                            tol=kwargs['int_param']['atol'])
+        cor_out = correctEvents(events, evout, prop, sn=len(s0),
+                            tol=kwargs['int_param']['atol'], 
+                            int_param=kwargs['int_param'],
+                            mu1=kwargs['mu'])
+        evout.clear()
+        evout.extend(cor_out)
+    
+    if retarr:
+        return np.asarray(lst)
 
 def prop2Limits(mu1, y0, lims, **kwargs):
     """
