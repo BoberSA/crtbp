@@ -64,7 +64,7 @@ T = ( 1.5*np.pi, # UNSTABLE FROM EARTH
      -1.5*np.pi) # STABLE TO EARTH
 
 # geometric event for integration of initial orbit for one revotulion
-eventY = {'ivar':iVarY, 'stopval':   0, 'direction':1, 'isterminal':True,  'corr':True}
+eventY = {'ivar':iVarY, 'dvar':iVarVY, 'stopval':   0, 'direction':1, 'isterminal':True,  'corr':True}
 
 # projection definition
 projections = ((0, 1), (0, 2), (1, 2))
@@ -151,7 +151,7 @@ for i in range(4):
         a.set_title(titles[i//2])
         a.plot(L[1, p[0]], L[1, p[1]], 'ok')
         a.text(L[1, p[0]], L[1, p[1]], ' L2')
-        a.set_aspect('equal', 'datalim')
+        a.set_aspect('equal')#, 'datalim')
     print(' '.join(titles).split()[i], end = ' ')
 
 # calculate min and max values for x, y and z coordinates of manifolds
