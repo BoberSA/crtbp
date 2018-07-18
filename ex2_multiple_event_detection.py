@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 from crtbp_prop import propCrtbp
 from find_vel import findVPlanes
 from lagrange_pts import lagrange1, lagrange2
-from stop_funcs import stopFunCombined, iVarX, iVarY, iVarAlpha
+from stop_funcs import stopFunCombined, iVarX, iVarVX, iVarY, iVarAlpha
 
 # constants
 Sm =  1.9891e30 # mass of the Sun
@@ -56,7 +56,7 @@ ev_names = ['X=0']
 # try this values for 'count': [-1, 0, 1, 2, ...]
 # and this values for 'isterminal': [True, False]
 # see what is going on
-eventX = {'ivar':iVarX, 'stopval':L[1], 'direction': 0, 'isterminal':True, 'corr':True, 'count':2}
+eventX = {'ivar':iVarX, 'dvar':iVarVX, 'stopval':L[1], 'direction': 0, 'isterminal':True, 'corr':True, 'count':2}
 
 evout = []
 
@@ -68,6 +68,6 @@ plt.plot(arr[:,0],arr[:,1],'-', alpha=0.8, linewidth=2)
 plt.axis('equal')
 
 # plot events
-for ie, ic, s in evout[1:]:
+for ie, ic, s, _ in evout[1:]:
     plt.plot(s[0], s[1], '+k')
     plt.text(s[0], s[1], ' [%d]{%d} %s' % (ie, 0 if ic is None else ic, ev_names[ie]))    
