@@ -13,7 +13,7 @@ import scipy.optimize
 from crtbp_prop import propCrtbp
 from find_vel import findVLimits
 from lagrange_pts import lagrange_pts
-from stop_funcs import stopFunCombined, iVarX, iVarY
+from stop_funcs import stopFunCombined, iVarX, iVarVX, iVarY, iVarVY
 
 # constants
 Sm =  1.9891e30 # mass of the Sun
@@ -33,14 +33,14 @@ dXkm = 800000
 rightpL1 = L1 + dXkm / ER
 leftpL1 = L1 - dXkm / ER
 topp = 1.0
-evL1_L = {'ivar':iVarX, 'stopval':  leftpL1, 'direction': -1, 'isterminal':True, 'corr':True}
-evL1_R = {'ivar':iVarX, 'stopval': rightpL1, 'direction':  1, 'isterminal':True, 'corr':True}
+evL1_L = {'ivar':iVarX, 'dvar':iVarVX, 'stopval':  leftpL1, 'direction': -1, 'isterminal':True, 'corr':True}
+evL1_R = {'ivar':iVarX, 'dvar':iVarVX, 'stopval': rightpL1, 'direction':  1, 'isterminal':True, 'corr':True}
 evL1_U = {'ivar':iVarY, 'stopval':     topp, 'direction':  0, 'isterminal':True, 'corr':False}
 evL1_D = {'ivar':iVarY, 'stopval':    -topp, 'direction':  0, 'isterminal':True, 'corr':False}
 evL1 = {'left':[evL1_L], 'right':[evL1_R, evL1_D, evL1_U]}
 
 # additional events
-evY = {'ivar':iVarY, 'stopval':  0, 'direction': 1, 'isterminal':True,  'corr':True}
+evY = {'ivar':iVarY, 'dvar':iVarVY, 'stopval':  0, 'direction': 1, 'isterminal':True,  'corr':True}
 
 # Az range - z-amplitudes of halo orbits (km)
 halo_z0 = np.arange(700000, 0, -50000)
@@ -57,7 +57,7 @@ def halo_goal(x, z, mu1, retv=False, **kwargs):
     propCrtbp(mu1, s0, [0, 2*np.pi], \
                 stopf=stopFunCombined, events = [evY], out=evout, \
                 **kwargs)
-    evout.pop(0)
+#    evout.pop(0)
     vx = evout[-1][2][3]
     vz = evout[-1][2][5]
     if retv:
