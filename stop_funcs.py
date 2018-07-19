@@ -451,64 +451,158 @@ def iVarLyapunovRight(t, s, **kwargs):
         return -1
 
 #-----------------------------------------------------------------------------
+
+def plotEventFDF(event, tr, corr=False, figsize=(60,10), linewidth=0.1, **kwargs):
+    '''
+    Plot event function (ivar) and derivative of event function (dvar) along
+    specified trajectory.
+    
+    Parameters
+    ----------
+    
+        event : dict
+            See event description in stopFunCombined.
+            
+        tr : array of state vectors
+            Trajectory along which event function need to be plotted.
+            
+        corr : bool
+            Calculate events using Newton/Brent methods.
+            
+        figsize : tuple
+            Size of figure in inches.
+            
+        linewidth : scalar
+            Width of lines on plot.
+            
+        tol : scalar
+            Tolerance. 
+            |event_fun(t, s) - stopval| < tol
+            
+    Returns
+    -------
+        fig: matplotlib figure
+            
+    '''
+    efval = []
+    edval = []
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    ax1 = ax.twinx()
+    for i, p in enumerate(tr):
+        ef = event['ivar'](p[6], p[:6], **event.get('kwargs', {})) - event['stopval']
+        if i > 0:
+            if (efp>=0 and ef<=0) or (efp<=0 and ef>=0):
+                ax.vlines(tr[i-1, 6], -0.0025, 0.0175, linewidth=linewidth)
+                ax.vlines(p[6], -0.0025, 0.0175, linewidth=linewidth)
+                if corr:
+                    ret = newton_int(event, tr[i-1, 6], tr[i-1, :6], **kwargs)
+                    if ret is None:
+                        t, s = brent(event, tr[i-1, 6], tr[i, 6], tr[i-1, :6], **kwargs)
+                    else:
+                        t, s = ret
+                    ax.plot(t, 0, '.k', markersize=1)
+        efp = ef
+        efval.append(ef)
+        edval.append(event['dvar'](p[6], p[:6], **event.get('kwargs', {})))
+    ax.plot(tr[:,6], efval, '.-r', label='E', linewidth=linewidth, markersize=0.2)
+    ax1.plot(tr[:,6], edval, '.-b', label='dE/dt', linewidth=linewidth, markersize=0.2)
+    ax.legend(loc=2)
+    ax1.legend(loc=1)
+    ax.grid(True)
+    
+    return fig
+
+#-----------------------------------------------------------------------------
         
-def newton(event, t0, s0, prop, tol=1e-12, maxiter=50, debug=True):
-    """
-    Special edition of Newton method for event-finding process.
-    Faster than newton_int version.
-    """
-    
-    ivar = event['ivar']
-    dvar = event['dvar']
-    stopval = event['stopval']
-    evkwargs = event.get('kwargs', {})
-    prop.set_initial_value(s0, t0)
-    
-    t = t0
-    s = s0.copy()
-    
-    if debug:
-        lst = []
-    
-    for i in range(maxiter):
-        fder = dvar(t, s, **evkwargs)
-        if fder == 0:
-            warnings.warn('Zero derivative', RuntimeWarning)
-            return t, s
-        fval = ivar(t, s, **evkwargs) - stopval
-        if debug:
-            lst.append((t, fval, fder))
-        if abs(fval) < tol:
-#            print('Newton iterations:', i)
-            return t, s
-
-        newton_step = fval / fder
-        t1 = t - newton_step
-#        s1 = propCrtbp(mu1, s0, [0, t1-t0], int_param=int_param)[-1, :6]
-        s1 = prop.integrate(t1)
-
-        t = t1
-        s = s1
-
-    if debug:
-        lst = np.array(lst)
-        fig, ax = plt.subplots(1, 3, figsize=(15,5))
-        ax[0].plot(range(len(lst)), lst[:,0])
-        ax[0].set_title('steps')
-        ax[1].plot(lst[:,0], lst[:,1], 'r')
-        ax[1].set_title('fval')
-        ax[2].plot(lst[:,0], lst[:,2], 'g')
-        ax[2].set_title('fder')
-        fig.tight_layout()
-    print('\nt0:', t0, '\ns0:', s0)
-    msg = "Failed to converge after %d iterations, value is %s" % (maxiter, t)
-    raise RuntimeError(msg)
+#def newton(event, t0, s0, prop, tol=1e-12, maxiter=50, debug=True):
+#    """
+#    Special edition of Newton method for event-finding process.
+#    Faster than newton_int version. Not well tested.
+#    """
+#    
+#    ivar = event['ivar']
+#    dvar = event['dvar']
+#    stopval = event['stopval']
+#    evkwargs = event.get('kwargs', {})
+#    prop.set_initial_value(s0, t0)
+#    
+#    t = t0
+#    s = s0.copy()
+#    
+#    if debug:
+#        lst = []
+#    
+#    for i in range(maxiter):
+#        fder = dvar(t, s, **evkwargs)
+#        if fder == 0:
+#            warnings.warn('Zero derivative', RuntimeWarning)
+#            return t, s
+#        fval = ivar(t, s, **evkwargs) - stopval
+#        if debug:
+#            lst.append((t, fval, fder))
+#        if abs(fval) < tol:
+##            print('Newton iterations:', i)
+#            return t, s
+#
+#        newton_step = fval / fder
+#        t1 = t - newton_step
+##        s1 = propCrtbp(mu1, s0, [0, t1-t0], int_param=int_param)[-1, :6]
+#        s1 = prop.integrate(t1)
+#
+#        t = t1
+#        s = s1
+#
+#    if debug:
+#        lst = np.array(lst)
+#        fig, ax = plt.subplots(1, 3, figsize=(15,5))
+#        ax[0].plot(range(len(lst)), lst[:,0])
+#        ax[0].set_title('steps')
+#        ax[1].plot(lst[:,0], lst[:,1], 'r')
+#        ax[1].set_title('fval')
+#        ax[2].plot(lst[:,0], lst[:,2], 'g')
+#        ax[2].set_title('fder')
+#        fig.tight_layout()
+#    print('\nt0:', t0, '\ns0:', s0)
+#    msg = "Failed to converge after %d iterations, value is %s" % (maxiter, t)
+#    raise RuntimeError(msg)
     
 def newton_int(event, t0, s0, mu1, int_param, tol=1e-12, maxiter=50, debug=False):
     from crtbp_prop import propCrtbp
     """
     Special edition of Newton method for event-finding process.
     Slower but bug-free version.
+    
+    Parameters
+    ----------
+    
+        event : dict
+            See event description in stopFunCombined.
+            
+        t0 : scalar
+            Epoch to start converge from.
+            
+        s0 : array-like
+            State vector to start converge from.
+            
+        mu1 : scalar
+            Gravitational constant of crtbp.
+            
+        int_param : dict
+            Integrator parameters.
+            
+        tol : scalar
+            Tolerance. 
+            |event_fun(t, s) - stopval| < tol
+            
+    Returns
+    -------
+        (t, s): tuple
+            t - epoch when event occur
+            s - state vector when event occur
+            
+        None
+            If method wasn't converged within maxiter iterations.
+            
     """
     
     ivar = event['ivar']
@@ -555,9 +649,40 @@ def newton_int(event, t0, s0, mu1, int_param, tol=1e-12, maxiter=50, debug=False
         ax[2].set_title('fder')
         fig.tight_layout()
 
-    print('\nt0:', t0, '\ns0:', s0)
-    msg = "Failed to converge after %d iterations, value is %s" % (maxiter, t)
-    raise RuntimeError(msg) 
+#    print('\nt0:', t0, '\ns0:', s0)
+#    msg = "Failed to converge after %d iterations, value is %s" % (maxiter, t)
+#    raise RuntimeError(msg) 
+    return None
+    
+def brent(event, t0, t1, s0, mu1, int_param, tol=1e-12, maxiter=50, debug=False):
+    from crtbp_prop import propCrtbp
+    import scipy.optimize
+    """
+    Special edition of Brent method for event-finding process.
+    Slower than Newton method but converges better. This method 
+    used when Newton's method can't converge.
+    """
+    
+    ivar = event['ivar']
+#    dvar = event['dvar']
+    stopval = event['stopval']
+    evkwargs = event.get('kwargs', {})
+    
+    s_opt = [0]
+    
+    def fopt(t, s0, t0):
+        if t == t0:
+            s = s0.copy()
+        else:
+            s = propCrtbp(mu1, s0, [t0, t], int_param=int_param)[-1, :6]
+        s_opt[0] = s
+        fval = ivar(t, s, **evkwargs) - stopval
+        return math.fabs(fval)
+        
+    t_opt = scipy.optimize.brent(fopt, args=(s0, t0), brack=(t0, t1), tol=tol)
+
+    return t_opt, s_opt[0]
+    
 #-----------------------------------------------------------------------------
 
 def stopFun(t, s, lst, ivar=iVarY, stopval=0, direction=0, corr = True, **kwargs):
@@ -1134,7 +1259,7 @@ def stopFunCombined(t, s, lst, events, out=[], **kwargs):
     
     -1 : scalar
         When there are terminal event in event list and independent variable \
-        assiciated with this event goes through defined stopval value in \
+        associated with this event goes through defined stopval value in \
         specified direction. Will be treated by scipy.integrate.ode as it \
         should stop integration process.
         
@@ -1258,18 +1383,24 @@ def correctEvents(events, evout, prop, tol=1e-12, sn=6, maxiter=50, **kwargs):
             out.append([ev[0], ev[1], ev[3][:sn+1], ev[5]])
             continue
 
-        t, s = newton_int(events[ev[0]], 
-                      ev[2][sn], 
-                      ev[2][:sn], 
-                      tol=tol,
-                      maxiter=maxiter,
-                      **kwargs)
-#        t, s = newton(events[ev[0]], 
-#                      ev[2][sn], 
-#                      ev[2][:sn], 
-#                      prop, 
-#                      tol=tol,
-#                      maxiter=maxiter)
+        ret = newton_int(events[ev[0]], 
+                         ev[2][sn], 
+                         ev[2][:sn], 
+                         tol=tol,
+                         maxiter=maxiter,
+                         **kwargs)
+        if ret is None:
+            print('Newton failed -> Calling Brent :)')
+            t, s = brent(events[ev[0]], 
+                         ev[2][sn], 
+                         ev[3][sn], 
+                         ev[2][:sn], 
+                         tol=tol,
+                         maxiter=maxiter,
+                         **kwargs)
+        else:
+            t, s = ret
+
         out.append([ev[0], ev[1], list(s)+[t], ev[5]])
         
     return out

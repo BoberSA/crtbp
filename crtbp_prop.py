@@ -130,12 +130,14 @@ def propCrtbp(mu, s0, tspan, retarr=True, **kwargs):
         prop.set_solout(lambda t, s: stopNull(t, s, lst))
     prop.integrate(tspan[1])
 
+    del prop
+    
     evout = kwargs.get('out', [])
     if len(evout) > 1:
         events = kwargs.get('events', [])
 #        cor_out = correctEvents(events, evout, prop, sn=len(s0),
 #                            tol=kwargs['int_param']['atol'])
-        cor_out = correctEvents(events, evout, prop, sn=len(s0),
+        cor_out = correctEvents(events, evout, None, sn=len(s0),
                             tol=kwargs['int_param']['atol'], 
                             int_param=kwargs['int_param'],
                             mu1=kwargs['mu'])
